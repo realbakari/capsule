@@ -6,23 +6,45 @@ Capsule inspects a workspace, condenses everything readable into a compact run
 context, routes a task to exactly one skill pack, and rebuilds skills as
 portable, license-gated, validated packages.
 
-## Install
+## Install & Distribute
+
+### 1. Install Skills via `npx skills` (Universal Agent Distribution)
+
+Install skills directly into Claude Code, Cursor, Codex, Windsurf, or GitHub Copilot:
+
+```bash
+# Install all skills from Capsule repository
+npx skills add realbakari/capsule
+
+# Or install a specific skill
+npx skills add realbakari/capsule --skill evaluating
+```
+
+### 2. Python Control Plane CLI
 
 ```bash
 pip install pyyaml pytest
-python3 -m pytest tests/ -q
+python3 -m pytest test_capsule.py -q
 ```
 
 ## Use
 
 ```bash
-python3 -m capsule.cli index --out capsule-index.json
+# Indexing & Taxonomy
+python3 -m capsule.cli index --out capsule-index.json --by-category --lifecycle stable
 python3 -m capsule.cli show --index capsule-index.json --type skill
 python3 -m capsule.cli route --index capsule-index.json --task "clean up this xlsx"
+
+# Reconstructing & Validating
 python3 -m capsule.cli reconstruct --index capsule-index.json --dest ./packs --package --audit
 python3 -m capsule.cli validate ./packs/*
-python3 -m capsule.cli lint --index capsule-index.json
 python3 -m capsule.cli audit --index capsule-index.json
+
+# Multi-Host Plugin Manifest Emission (.claude-plugin, .codex-plugin, .cursor-plugin, .grok-plugin)
+python3 -m capsule.cli emit-plugins --repo realbakari/capsule --out .
+
+# Deterministic Skill Evaluations
+python3 -m capsule.cli eval --evals ./skill-evals --output agent-output.txt
 ```
 
 ## Customization
