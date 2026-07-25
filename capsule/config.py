@@ -25,6 +25,18 @@ from .schema import RunContext, SourceRecord
 # so this is a configurable early-warning line, not a spec constant.
 DEFAULT_DESCRIPTION_BUDGET = 12000
 
+# Corpus size at which selection accuracy is expected to degrade.
+#
+# There is no published number for skills. The closest measured analogue is the
+# tool catalog, where Anthropic reports that "Claude's ability to pick the right
+# tool degrades once you exceed 30-50 available tools" and recommends deferred
+# loading past 10. The mechanism is the same one skills have -- N descriptions
+# competing for attention in one system prompt -- so the figure is carried over
+# as an early-warning line, not as a measured skill threshold. It is a config
+# knob for that reason.
+DEFAULT_SKILL_COUNT_WARN = 30
+DEFAULT_SKILL_COUNT_HIGH = 50
+
 
 @dataclass
 class Precedence:
@@ -107,12 +119,38 @@ class BudgetReport:
     def over_budget(self) -> bool:
         return self.total_chars > self.budget
 
+    @property
+    def recall_risk(self) -> str:
+        """Corpus size relative to the published degradation band.
+
+        Two different failures share one budget line and are worth separating.
+        Truncation is a cliff: past the character limit, the tail is dropped and
+        those skills never fire. Recall degradation is a slope: every extra
+        description makes selection a little worse, and a corpus can be well
+        inside the character budget while sitting far past the point where the
+        model reliably picks the right one.
+        """
+        if self.skill_count > DEFAULT_SKILL_COUNT_HIGH:
+            return "high"
+        if self.skill_count > DEFAULT_SKILL_COUNT_WARN:
+            return "elevated"
+        return "ok"
+
     def line(self) -> str:
         state = "OVER" if self.over_budget else "ok"
-        return (
+        line = (
             f"description budget: {self.total_chars}/{self.budget} chars "
             f"across {self.skill_count} skills [{state}]"
         )
+        if self.recall_risk != "ok":
+            line += (
+                f"\n  recall risk: {self.recall_risk} — {self.skill_count} skills "
+                f"competing in one system prompt. The measured analogue (tool "
+                f"catalogs) degrades past {DEFAULT_SKILL_COUNT_WARN}-"
+                f"{DEFAULT_SKILL_COUNT_HIGH}; route or consolidate rather than "
+                f"loading all of them"
+            )
+        return line
 
 
 def description_budget(context: RunContext, budget: int = DEFAULT_DESCRIPTION_BUDGET) -> BudgetReport:

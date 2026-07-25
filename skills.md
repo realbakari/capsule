@@ -77,6 +77,31 @@ hard limits published are per-surface, not per-corpus:
 The API cap is the one that forces the issue: past eight skills, something has to
 choose which eight go in. That is routing, whether you do it deliberately or not.
 
+### The measured analogue: tool catalogs
+
+Skills have no published degradation number, but the same problem one layer down
+does. Anthropic's [tool search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool)
+exists because loading every tool definition up front fails the same way, and
+that page carries figures:
+
+- Selection accuracy **degrades past 30–50 available tools**.
+- A typical multi-server setup burns **~55k tokens** in definitions before any
+  work happens; deferred loading cuts that **by over 85%**.
+- Use deferred loading **at 10 or more tools**; keep the 3–5 most-used loaded.
+
+The mechanism is identical — N descriptions competing for attention in one
+system prompt — so `capsule lint` carries the band over as an early-warning
+line, labelled as an analogue rather than a measured skill threshold. A 62-skill
+corpus reports `recall risk: high` even when it is inside the character budget,
+because truncation is a cliff and recall degradation is a slope.
+
+The published fix is also the same one Capsule implements: **search and load a
+focused set on demand** rather than mounting everything. One piece of their
+advice transfers directly to skill naming — *"use consistent namespacing… prefix
+by service or resource (`github_`, `slack_`) so one search matches the whole
+group."* That is exactly the signal `capsule route` derives domains from, and it
+is a reason to name skills `specs-websocket` rather than `websocket`.
+
 ## Governance, and what it maps to
 
 Anthropic's [enterprise guidance](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/enterprise)

@@ -202,6 +202,28 @@ DEFAULT_RULES = [
         body_regex=r">>?\s*(SOUL|MEMORY|AGENTS|CLAUDE)\.md",
     ),
     Rule(
+        id="ast03-memory-write",
+        action=ACTION_APPROVAL,
+        reason="writes to the agent's persistent memory directory; anything stored "
+               "there is re-read at the start of every later session",
+        description="AST03/AST01: /memories is durable instruction storage",
+        body_regex=r"(?:\"command\"\s*:\s*\"(?:create|str_replace|insert|rename)\"[^}]{0,200})?"
+                   r"/memories/[\w./-]*"
+                   r"|memory\s+tool[^.\n]{0,60}\b(?:create|write|store|save)\b",
+    ),
+    Rule(
+        id="ast03-memory-path-traversal",
+        action=ACTION_DENY,
+        reason="escapes the memory directory; reaches files the memory tool is "
+               "explicitly required to keep out of reach",
+        description="AST03: documented memory path-traversal vector",
+        # The documented attack shape, plus the URL-encoded form the guidance
+        # says to watch for.
+        body_regex=r"/memories/\.\.[/\\]"
+                   r"|/memories/%2e%2e"
+                   r"|\.\.[/\\]\.\.[/\\][\w.]*(?:secrets?|\.env|credentials?|\.ssh)",
+    ),
+    Rule(
         id="ast04-hidden-html-directives",
         action=ACTION_APPROVAL,
         reason="contains HTML comments; a documented channel for instructions invisible on render",

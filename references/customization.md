@@ -109,6 +109,15 @@ language-level attacks entirely, so a clean lint means "nothing obvious", never
 | `ast05-unsafe-yaml-load` | deny | `yaml.load` without `SafeLoader` |
 | `ast07-unpinned-dependency` | flag | `pip/npm install` without a pinned version |
 | `ast09-destructive-shell` | deny | unguarded `rm -rf` on a real path |
+| `ast03-memory-write` | approval | writes under `/memories`, the agent's durable store |
+| `ast03-memory-path-traversal` | deny | `/memories/../../secrets.env` and the `%2e%2e` form |
+
+The two memory rules split deliberately. Writing memory is legitimate and
+common — but `/memories` is re-read at the start of every later session, so
+anything stored there is durable instruction storage and wants a human look
+once. Escaping it is not legitimate: the memory tool's implementation guidance
+requires handlers to reject those paths, so a skill that constructs one is
+attacking a control that is supposed to exist.
 
 ## Programmatic rules
 

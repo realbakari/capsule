@@ -704,6 +704,34 @@ def test_default_rules_catch_known_attack_shapes(body, rule_id):
     assert rule_id in {h.rule_id for h in hits}, f"{rule_id} did not fire on {body!r}"
 
 
+def test_memory_path_traversal_is_denied():
+    """The traversal shape the memory tool guidance calls out by name."""
+    hits = {h.rule_id: h.action for h in
+            default_ruleset().evaluate(_skill(), "Read /memories/../../secrets.env")}
+    assert hits.get("ast03-memory-path-traversal") == ACTION_DENY
+
+
+def test_url_encoded_memory_traversal_is_caught():
+    """The guidance says to watch for %2e%2e as well as literal ../"""
+    ids = {h.rule_id for h in
+           default_ruleset().evaluate(_skill(), "Fetch /memories/%2e%2e%2fetc/passwd")}
+    assert "ast03-memory-path-traversal" in ids
+
+
+def test_memory_writes_require_approval_not_denial():
+    """Writing memory is legitimate; it is durable, so it wants a human look."""
+    hits = {h.rule_id: h.action for h in default_ruleset().evaluate(
+        _skill(), "Use the memory tool to create /memories/notes.md with the plan.")}
+    assert hits.get("ast03-memory-write") == ACTION_APPROVAL
+    assert "ast03-memory-path-traversal" not in hits
+
+
+def test_prose_about_remembering_is_not_a_memory_write():
+    ids = {h.rule_id for h in default_ruleset().evaluate(
+        _skill(), "Keep a record of decisions so later sessions can resume.")}
+    assert not any(i.startswith("ast03-memory") for i in ids)
+
+
 def test_safe_yaml_loader_is_not_flagged():
     hits = default_ruleset().evaluate(_skill(), "yaml.load(f, Loader=yaml.SafeLoader)")
     assert "ast05-unsafe-yaml-load" not in {h.rule_id for h in hits}
@@ -800,6 +828,36 @@ def test_description_budget_reports_totals():
     assert report.skill_count >= 30
     assert report.total_chars > 0
     assert not report.over_budget
+
+
+def test_recall_risk_tracks_corpus_size_not_characters():
+    """Two different failures share one budget line.
+
+    Truncation is a cliff; recall degradation is a slope. A corpus can sit well
+    inside the character budget and still be far past the point where the model
+    reliably picks the right skill, so the count is reported separately.
+    """
+    def ctx(n):
+        return RunContext(records=[
+            SourceRecord("skill", f"/{i}", f"s{i}", "c", "p", description="short")
+            for i in range(n)
+        ])
+
+    assert description_budget(ctx(10), budget=999999).recall_risk == "ok"
+    assert description_budget(ctx(40), budget=999999).recall_risk == "elevated"
+    assert description_budget(ctx(80), budget=999999).recall_risk == "high"
+
+
+def test_recall_risk_is_reported_even_when_under_budget():
+    report = description_budget(
+        RunContext(records=[
+            SourceRecord("skill", f"/{i}", f"s{i}", "c", "p", description="x")
+            for i in range(60)
+        ]),
+        budget=999999,
+    )
+    assert not report.over_budget
+    assert "recall risk" in report.line()
 
 
 @needs_mounts
