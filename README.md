@@ -60,24 +60,61 @@ repos:
       - id: capsule-doctor
 ```
 
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `capsule index` | Discover workspace sources, condense into `capsule-index.json` |
+| `capsule show` | Display a single record from the index |
+| `capsule route` | Route a task to exactly one skill (shortlist then rerank) |
+| `capsule reconstruct` | Rebuild a skill as a portable, license-gated package |
+| `capsule validate` | Enforce the SKILL.md upload contract |
+| `capsule audit` | Run all policy gates, print the ALLOW/DENY log |
+| `capsule eval` | Run deterministic assertion tests on skill outputs |
+| `capsule emit-plugins` | Generate plugin manifests for Claude, Codex, Cursor, Grok |
+| `capsule schema` | Export JSON Schema Draft-07 for frontmatter, evals, index |
+| `capsule doctor` | Audit skill calibration: prescription density, contradictions |
+| `capsule lint` | OWASP AST10 rules, lethal-trifecta, budget/collision checks |
+| `capsule brief` | Emit an injectable activation block for a routed task |
+| `capsule contract` | Extract checkable obligations from a skill body |
+| `capsule verify` | Check a diff against extracted contracts (exit 5 = violation) |
+| `capsule harness` | Generate PreToolUse hooks and deny rules from contracts |
+| `capsule registry` | Query skills.sh and apply the multi-provider trust gate |
+
+Run `capsule <command> --help` for flags and options.
+
 ## Use
 
 ```bash
-# Indexing & Taxonomy
-python3 -m capsule.cli index --out capsule-index.json --by-category --lifecycle stable
-python3 -m capsule.cli show --index capsule-index.json --type skill
-python3 -m capsule.cli route --index capsule-index.json --task "clean up this xlsx"
+# Indexing & Routing
+capsule index --by-category --lifecycle stable
+capsule show --type skill
+capsule route --task "clean up this xlsx"
 
 # Reconstructing & Validating
-python3 -m capsule.cli reconstruct --index capsule-index.json --dest ./packs --package --audit
-python3 -m capsule.cli validate ./packs/*
-python3 -m capsule.cli audit --index capsule-index.json
+capsule reconstruct --dest ./packs --package --audit
+capsule validate ./packs/*
+capsule audit
 
-# Multi-Host Plugin Manifest Emission (.claude-plugin, .codex-plugin, .cursor-plugin, .grok-plugin)
-python3 -m capsule.cli emit-plugins --repo realbakari/capsule --out .
+# Governance & Enforcement
+capsule lint
+capsule doctor
+capsule contract --skill my-skill
+capsule verify --diff changes.patch
+capsule harness --skill my-skill --target claude-code
+capsule brief --task "convert this pdf"
+
+# Multi-Host Plugin Manifests
+capsule emit-plugins --repo realbakari/capsule --out .
+
+# Registry & Trust
+capsule registry --query "pdf" --limit 10
 
 # Deterministic Skill Evaluations
-python3 -m capsule.cli eval --evals ./skill-evals --output agent-output.txt
+capsule eval --evals ./skill-evals --output agent-output.txt
+
+# JSON Schema Export
+capsule schema --out ./schemas
 ```
 
 ## Customization
