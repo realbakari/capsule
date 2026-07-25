@@ -6,6 +6,43 @@ landed, the turn was already spent, and someone has to read the failure and go
 back. The host harness exposes two earlier points, and a contract translates into
 both.
 
+## Targets: the permission models are not the same
+
+`capsule harness --target` emits for one host at a time, because the two
+permission models are genuinely different and a file written for one does
+nothing on the other.
+
+| | Claude Code | Managed Agents |
+|---|---|---|
+| Policies | `allow` / `ask` / `deny` | `always_allow` / `always_ask` — **no deny** |
+| Granularity | command pattern: `Bash(npm install *)` | the tool: `bash` |
+| Removing a capability | a deny rule | disable the tool entirely |
+| Content-shaped bans | `PreToolUse` hook | no interception point |
+| Defaults | rules you write | agent toolset allows; MCP toolsets ask |
+
+The consequence for a contract is a real loss of fidelity, and the emitted
+artifact records it rather than leaving it to be discovered. A prohibition on
+`npm install` becomes, on Managed Agents:
+
+```json
+{"name": "bash", "permission_policy": {"type": "always_ask"}}
+```
+
+That is broader than intended — it pauses before *every* shell command, not
+just the prohibited one — and weaker, because a human can approve it. It is
+still worth emitting: an approval prompt in front of the shell is a real
+control and the strongest this host has. It is not a deny rule, and Capsule
+does not call it one. To remove a capability outright here, disable the tool
+rather than setting a policy on it.
+
+Content-shaped prohibitions (`SOLID`, `•`) have no equivalent at all on this
+host and are listed under `_capsule.unenforced`. They remain verify-only.
+
+One default worth knowing: **MCP toolsets default to `always_ask`** while the
+agent toolset defaults to `always_allow`. The stated reason is that new tools
+appearing on an MCP server should not execute without approval — the same
+reasoning behind Capsule's own registry trust gate.
+
 ## Enforcement ordering
 
 Weakest to strongest:

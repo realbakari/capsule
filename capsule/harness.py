@@ -69,6 +69,14 @@ def split_obligations(contract: Contract) -> tuple[list[Obligation], list[Obliga
 
 
 def permission_rules(contract: Contract) -> dict:
+    """Claude Code permission rules.
+
+    `target` is recorded because this shape is host-specific and does not
+    travel. Claude Code evaluates deny -> ask -> allow over command patterns;
+    Managed Agents has no deny primitive at all. Emitting this format without
+    saying which host it is for produces a file that silently does nothing
+    somewhere else.
+    """
     commands, _ = split_obligations(contract)
     deny_patterns = [f"Bash({ob.token} *)" for ob in commands]
     return {
@@ -76,9 +84,80 @@ def permission_rules(contract: Contract) -> dict:
             "deny": deny_patterns
         },
         "_capsule": {
+            "target": "claude-code",
             "coverage_note": f"enforces {len(commands)} command-shaped obligations"
         }
     }
+
+
+# Managed Agents offers `always_allow` and `always_ask`. There is no deny: a
+# tool is either governed by a policy or removed from the agent entirely.
+POLICY_ALLOW = "always_allow"
+POLICY_ASK = "always_ask"
+
+# Command-shaped prohibitions all land on one tool, because that is the only
+# granularity the policy model has.
+_AGENT_SHELL_TOOL = "bash"
+
+
+def managed_agent_policy(contract: Contract) -> dict:
+    """Translate a contract into a Managed Agents tool configuration.
+
+    The translation is lossy in one direction that matters, and the emitted
+    file says so rather than leaving it to be discovered.
+
+    Claude Code can deny a *command pattern*: `Bash(npm install *)` blocks that
+    invocation and nothing else. Managed Agents policies attach to a **tool**,
+    and the strongest available policy is `always_ask`. So a contract that
+    prohibits `npm install` becomes "pause before any bash command" -- broader
+    than intended and weaker than a denial, because a human can approve it.
+
+    That is still worth emitting: an approval prompt in front of every shell
+    command is a real control, and it is the strongest one this host has. But
+    it is not the deny rule, and calling it one would misrepresent the gate.
+    """
+    commands, contents = split_obligations(contract)
+
+    configs = []
+    if commands:
+        configs.append({
+            "name": _AGENT_SHELL_TOOL,
+            "permission_policy": {"type": POLICY_ASK},
+        })
+
+    policy = {
+        "tools": [
+            {
+                "type": "agent_toolset_20260401",
+                "default_config": {"permission_policy": {"type": POLICY_ALLOW}},
+                **({"configs": configs} if configs else {}),
+            }
+        ],
+        "_capsule": {
+            "target": "managed-agents",
+            "coverage_note": (
+                f"{len(commands)} command-shaped obligation(s) mapped to "
+                f"'{POLICY_ASK}' on '{_AGENT_SHELL_TOOL}'"
+            ),
+            "fidelity_loss": (
+                "Managed Agents has no deny primitive and policies attach to a "
+                "tool rather than a command pattern. A prohibition on a single "
+                "command becomes an approval prompt before every command that "
+                "tool can run, and a human can approve it. To remove a "
+                "capability outright, disable the tool instead of setting a "
+                "policy on it."
+            ),
+            "unenforced": [
+                ob.token for ob in contents
+            ],
+            "unenforced_note": (
+                "Content-shaped prohibitions have no equivalent here. Claude "
+                "Code blocks them with a PreToolUse hook; this host exposes no "
+                "such interception point, so they remain verify-only."
+            ),
+        },
+    }
+    return policy
 
 
 def hook_config(contract: Contract, route_prompts: bool = False) -> dict:
@@ -253,13 +332,22 @@ class ArtifactEntry:
 
 
 def emit_all(contract: Contract, dest_dir: str | Path,
-             index_path: str | None = None) -> list[ArtifactEntry]:
+             index_path: str | None = None,
+             target: str = "claude-code") -> list[ArtifactEntry]:
     """Harness artifacts for a contract.
 
     `index_path` opts into the prompt router. It is separate because routing
     needs a workspace index, which is a different concern from a contract, and
     because a hook that runs on every prompt should be asked for explicitly.
     """
+    if target == "managed-agents":
+        # A single JSON document: this host configures policy on the agent
+        # itself rather than through files a harness reads off disk.
+        return [ArtifactEntry(
+            "managed-agent-policy.json",
+            json.dumps(managed_agent_policy(contract), indent=2),
+        )]
+
     route_prompts = bool(index_path)
     entries = [
         ArtifactEntry("settings.json", json.dumps(permission_rules(contract), indent=2)),

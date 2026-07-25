@@ -201,6 +201,17 @@ the command never runs. Content-shaped ones become a `PreToolUse` hook on
 `Write|Edit`, so a banned token never reaches disk. The corpus splits 5 to 31
 across those two, so both are needed.
 
+**This is host-dependent, and one host cannot express it.** Managed Agents has
+no deny primitive: policies are `always_allow` or `always_ask`, and they attach
+to a *tool* rather than a command pattern. A prohibition on `npm install`
+degrades there to "pause before every bash command" — broader than intended and
+weaker, because a human can approve it. Content-shaped prohibitions have no
+equivalent at all, since that host exposes no `PreToolUse` interception point.
+`capsule harness --target managed-agents` emits the strongest control available
+and records what it gave up in `_capsule.fidelity_loss`; it does not call an
+approval prompt a deny rule. The claim in this entry holds for Claude Code and
+is weaker elsewhere.
+
 Only `deny` rules are generated, never `allow`: inferring a permission grant from a
 regex over prose would widen a user's permissions on the strength of a pattern
 match. The hook fails *open* with a printed reason when it cannot parse a payload —

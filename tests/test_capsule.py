@@ -1472,8 +1472,8 @@ import subprocess as _sp  # noqa: E402
 
 from capsule.harness import (  # noqa: E402
     FETCH_DISABLED, FETCH_INDEXED, FETCH_LIVE, classify_input_provenance,
-    emit_all, hook_config, hook_script, is_command_token, permission_rules,
-    plugin_manifest, split_obligations,
+    emit_all, hook_config, hook_script, is_command_token, managed_agent_policy,
+    permission_rules, plugin_manifest, split_obligations,
 )
 
 _HARNESS_BODY = (
@@ -1509,6 +1509,44 @@ def test_permission_rules_only_deny():
     rules = permission_rules(_harness_contract())
     assert rules["permissions"]["deny"] == ["Bash(npm install *)"]
     assert "allow" not in rules["permissions"]
+
+
+def test_permission_rules_name_their_target_host():
+    """The shape is host-specific and does not travel.
+
+    Claude Code evaluates deny -> ask -> allow over command patterns; Managed
+    Agents has no deny at all. A file that does not say which host it is for
+    silently does nothing on the other one.
+    """
+    assert permission_rules(_harness_contract())["_capsule"]["target"] == "claude-code"
+
+
+def test_managed_agents_emits_a_valid_toolset_config():
+    policy = managed_agent_policy(_harness_contract())
+    toolset = policy["tools"][0]
+    assert toolset["type"] == "agent_toolset_20260401"
+    assert toolset["default_config"]["permission_policy"]["type"] == "always_allow"
+    assert toolset["configs"] == [
+        {"name": "bash", "permission_policy": {"type": "always_ask"}}
+    ]
+
+
+def test_managed_agents_declares_its_fidelity_loss():
+    """A prohibition becomes an approval prompt, which is weaker than a deny.
+
+    Emitting the weaker control is right -- it is the strongest this host has --
+    but calling it a deny rule would misrepresent the gate, so the artifact
+    says what it gave up.
+    """
+    meta = managed_agent_policy(_harness_contract())["_capsule"]
+    assert "no deny primitive" in meta["fidelity_loss"]
+    assert set(meta["unenforced"]) == {"SOLID", "•"}
+
+
+def test_managed_agents_target_emits_one_document():
+    """This host configures the agent, not files a harness reads off disk."""
+    paths = {e.path for e in emit_all(_harness_contract(), ".", target="managed-agents")}
+    assert paths == {"managed-agent-policy.json"}
 
 
 def test_permission_rules_state_their_own_coverage():

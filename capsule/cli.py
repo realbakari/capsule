@@ -580,7 +580,8 @@ def cmd_harness(args: argparse.Namespace) -> int:
     commands, contents = split_obligations(contract)
 
     index_path = str(Path(args.index).resolve()) if getattr(args, 'route_prompts', False) else None
-    emissions = emit_all(contract, args.dest, index_path=index_path)
+    emissions = emit_all(contract, args.dest, index_path=index_path,
+                         target=getattr(args, 'target', 'claude-code'))
     if args.dry_run:
         for emission in emissions:
             print(bold(f"--- {emission.path}"))
@@ -741,6 +742,9 @@ def main(argv: list[str] | None = None) -> int:
         if name == "harness":
             p.add_argument("--dest", default="./.claude")
             p.add_argument("--dry-run", action="store_true", help="print instead of writing")
+            p.add_argument("--target", default="claude-code",
+                           choices=["claude-code", "managed-agents"],
+                           help="host to emit for; the permission models differ")
             p.add_argument("--route-prompts", action="store_true",
                            help="also emit a UserPromptSubmit hook that routes every "
                                 "prompt and injects the activation brief")

@@ -253,6 +253,22 @@ pinning is first-class** there in a way it is not on the filesystem:
 `version` defaults to `latest`. Pin it in production — see
 [Lifecycle](#lifecycle-and-governance).
 
+Managed Agents also caps orchestration, and these are validation errors rather
+than guidance:
+
+| Limit | Value |
+|---|---|
+| Delegation depth | **one level** — an agent whose roster itself has a roster fails the create request |
+| Agents in a roster | **20** unique (the coordinator may call multiple copies of each) |
+| Concurrent threads | **25**; archive finished threads to free slots |
+| Skills per session | **500**, across all agents |
+
+Agents share the sandbox, filesystem and vault credentials, but **not** tools,
+MCP servers or context — each runs in its own thread. Scoping is therefore
+per-agent and is the recommended control: *"to limit an agent's access, declare
+only the servers it needs in its agent definition."* That is the same
+least-privilege posture `capsule lint` checks for on `agents/*.md`.
+
 Unknown frontmatter keys are ignored rather than rejected, so host extensions are
 safe to include in a portable skill. The reverse is not true: a skill that *depends*
 on `paths` to avoid over-triggering will over-trigger everywhere else.
