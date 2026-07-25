@@ -230,9 +230,24 @@ BLOCK  lark-approval     installs=435000   trust=deny/n-a  (pending is not a pas
 `azure-validate` is rated Safe by two providers and Critical by the third. A
 majority vote loads it. See `references/trust.md`.
 
-The sandbox egress allowlist does not include skills.sh, so the client is
-transport-injectable and the tests replay recorded fixtures offline. Add
-skills.sh to the allowlist for live queries, or keep passing `--fixtures`.
+The client is transport-injectable and the tests replay recorded fixtures
+offline, which is why `--fixtures` exists. Two things are needed for live
+queries: network egress to skills.sh, and an API key — `/api/v1/skills` now
+answers **401** unauthenticated, so pass `--api-key`. Without both, keep using
+`--fixtures`.
+
+Calibrating against a large corpus does not require the registry at all. The
+repositories it indexes are public, and cloning a few of them gives a real
+corpus to measure against:
+
+```bash
+git clone --depth 1 https://github.com/ComposioHQ/awesome-claude-skills
+git clone --depth 1 https://github.com/anthropics/skills
+capsule index --roots . --out big.json && capsule lint --index big.json
+```
+
+That sweep — 921 skills across five repositories — is what calibrated the
+description check. See [skills/descriptions.md](skills/descriptions.md).
 
 ## Design notes
 

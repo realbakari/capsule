@@ -438,6 +438,7 @@ def test_reconstruction_refuses_silent_overwrite(tmp_path):
 from capsule.registry import FixtureTransport, Registry, RegistryError  # noqa: E402
 from capsule.trust import (  # noqa: E402
     VERDICT_ALLOW, VERDICT_APPROVAL, VERDICT_DENY, ProviderAudit, aggregate,
+    aggregate_api,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "skills-sh"
@@ -501,6 +502,70 @@ def test_fixture_transport_replays_recorded_responses(registry):
     entries = registry.leaderboard(per_page=5)
     assert len(entries) == 5
     assert entries[0]["id"] == "vercel-labs/skills/find-skills"
+
+
+def test_curated_flattens_owner_groups_into_skills(tmp_path):
+    """Regression: the curated endpoint was unusable.
+
+    It returns owner *groups* -- {owner, totalInstalls, skills: [...]} -- not
+    skills. Returning `data` directly handed owner dicts to to_record, which
+    raised "name is required" because a group has no name.
+    """
+    (tmp_path / "api_v1_skills_curated.json").write_text(json.dumps({
+        "data": [
+            {"owner": "vercel-labs", "totalInstalls": 89240, "skills": [
+                {"id": "vercel-labs/skills/find-skills", "slug": "find-skills",
+                 "name": "find-skills", "source": "vercel-labs/skills", "installs": 24531}]},
+            {"owner": "supabase", "totalInstalls": 12084, "skills": [
+                {"id": "supabase/supabase/db", "slug": "db",
+                 "name": "Supabase", "source": "supabase/supabase", "installs": 12084}]},
+        ],
+        "totalOwners": 87, "totalSkills": 342,
+    }))
+    reg = Registry(FixtureTransport(tmp_path))
+    skills = reg.curated()
+    assert [s["slug"] for s in skills] == ["find-skills", "db"]
+    assert reg.to_record(skills[0], with_audit=False).installs == 24531
+
+
+def test_search_can_scope_to_an_owner(tmp_path):
+    (tmp_path / "api_v1_skills_search__q=react_limit=5_owner=expo.json").write_text(
+        json.dumps({"data": [{"id": "expo/skills/rn", "slug": "rn", "name": "RN",
+                              "source": "expo/skills", "installs": 1}]})
+    )
+    reg = Registry(FixtureTransport(tmp_path))
+    assert reg.search("react", limit=5, owner="expo")[0]["slug"] == "rn"
+
+
+def test_audit_parses_the_newer_provider_fields():
+    """Five providers now, and two fields this module never read."""
+    verdict = aggregate_api({"audits": [
+        {"provider": "Gen Agent Trust Hub", "slug": "agent-trust-hub",
+         "status": "pass", "riskLevel": "LOW", "categories": ["NO_CODE", "SAFE"]},
+        {"provider": "Runlayer", "slug": "runlayer", "status": "warn", "riskLevel": "MEDIUM"},
+        {"provider": "ZeroLeaks", "slug": "zeroleaks", "status": "pass", "riskLevel": "NONE"},
+    ]})
+    assert verdict.verdict == VERDICT_APPROVAL
+    assert len(verdict.providers) == 3
+
+
+def test_provider_audit_keeps_slug_and_categories():
+    audit = ProviderAudit.from_api({
+        "provider": "Gen Agent Trust Hub", "slug": "agent-trust-hub",
+        "status": "pass", "categories": ["NO_CODE", "SAFE"],
+    })
+    assert audit.slug == "agent-trust-hub"
+    assert audit.categories == ["NO_CODE", "SAFE"]
+
+
+def test_unknown_provider_still_aggregates_worst_case():
+    """A provider added after this code was written must not be ignored."""
+    verdict = aggregate_api({"audits": [
+        {"provider": "Gen Agent Trust Hub", "status": "pass", "riskLevel": "LOW"},
+        {"provider": "SomeNewAuditor2027", "status": "fail", "riskLevel": "CRITICAL"},
+    ]})
+    assert verdict.verdict == VERDICT_DENY
+    assert "SomeNewAuditor2027" in verdict.reason
 
 
 def test_missing_fixture_raises_rather_than_returning_empty(registry):
@@ -2190,6 +2255,33 @@ def test_third_person_should_be_used_phrasing_counts():
         "This skill should be used when the user wants to create a skill."
     )
     assert not any(f.check == "description-no-trigger" for f in findings)
+
+
+def test_workflow_position_counts_as_a_trigger_clause():
+    """Found by sweeping 921 public skills.
+
+    A trigger can be a point in a workflow rather than a condition: "use this
+    before any creative work" says when as clearly as "use when" does.
+    """
+    findings = description_quality(
+        "You MUST use this before any creative work - creating features, "
+        "building components, or modifying behavior."
+    )
+    assert not any(f.check == "description-no-trigger" for f in findings)
+
+
+def test_capability_only_descriptions_are_still_flagged():
+    """The counterweight: the sweep must not have made the check toothless.
+
+    This is real text from a public skill. It says what it does and never says
+    when, which is the defect the check exists for.
+    """
+    findings = description_quality(
+        "Identifies high-quality leads for your product by analyzing your "
+        "business, searching for target companies, and providing actionable "
+        "contact strategies. Perfect for sales teams."
+    )
+    assert any(f.check == "description-no-trigger" for f in findings)
 
 
 def test_good_description_yields_no_findings():

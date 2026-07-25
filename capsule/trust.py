@@ -52,6 +52,20 @@ VERDICT_APPROVAL = "approval-required"
 VERDICT_DENY = "deny"
 
 
+# Providers the registry aggregates. Five, not the three this module was first
+# written against -- Runlayer and ZeroLeaks were added later. The list is
+# informational: aggregation takes the worst verdict from whatever arrives, so
+# a new provider is handled without changing this constant. It exists so
+# `providers` in a verdict can be read against what was expected.
+KNOWN_PROVIDERS = (
+    "Gen Agent Trust Hub",
+    "Socket",
+    "Snyk",
+    "Runlayer",
+    "ZeroLeaks",
+)
+
+
 @dataclass
 class ProviderAudit:
     provider: str
@@ -59,15 +73,22 @@ class ProviderAudit:
     risk_level: str = ""
     summary: str = ""
     audited_at: str = ""
+    # URL-safe partner slug, used to link to the per-provider detail page.
+    slug: str = ""
+    # Only Agent Trust Hub reports these, e.g. ["NO_CODE", "SAFE"].
+    categories: list[str] = field(default_factory=list)
 
     @classmethod
     def from_api(cls, data: dict) -> "ProviderAudit":
+        raw_categories = data.get("categories") or []
         return cls(
             provider=str(data.get("provider", "unknown")),
             status=str(data.get("status", STATUS_UNKNOWN)).lower(),
             risk_level=str(data.get("riskLevel", "") or "").upper(),
             summary=str(data.get("summary", "")),
             audited_at=str(data.get("auditedAt", "")),
+            slug=str(data.get("slug", "") or ""),
+            categories=[str(c) for c in raw_categories] if isinstance(raw_categories, list) else [],
         )
 
     def rank(self) -> tuple[int, int]:

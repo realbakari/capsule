@@ -72,11 +72,25 @@ class FixtureTransport:
 
 @dataclass
 class HttpTransport:
-    """Live transport. Retries 429/503 with backoff, caps total attempts."""
+    """Live transport. Retries 429/503 with backoff, caps total attempts.
+
+    **There is no unauthenticated tier.** Every endpoint answers 401 without a
+    credential, so `api_key` is required in practice rather than optional.
+
+    The credential is a Vercel OIDC token, not a long-lived API key: it is
+    minted per request, scoped to a (team, project), and rotates roughly every
+    12 hours. Capsule takes it as a string and sends it as a bearer token,
+    which is the documented form -- but a token captured into a config file
+    will stop working within the day. Read it fresh from the environment.
+    """
 
     api_key: str | None = None
     timeout: int = 15
     max_attempts: int = 3
+    # Populated from the response headers on every call, so a caller can back
+    # off before being told to rather than after.
+    rate_limit_remaining: int | None = None
+    rate_limit_reset: int | None = None
 
     def get(self, path: str) -> dict:
         url = urllib.parse.urljoin(BASE_URL, path)
@@ -89,8 +103,16 @@ class HttpTransport:
             request = urllib.request.Request(url, headers=headers)
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    self._read_rate_limit(response.headers)
                     return json.loads(response.read().decode())
             except urllib.error.HTTPError as exc:
+                self._read_rate_limit(exc.headers)
+                if exc.code == 401:
+                    raise RegistryError(
+                        "401 unauthorized: skills.sh has no unauthenticated tier. "
+                        "Pass --api-key with a Vercel OIDC token "
+                        "(VERCEL_OIDC_TOKEN), or use --fixtures offline."
+                    ) from exc
                 if exc.code == 404:
                     raise RegistryError(f"not found: {path}") from exc
                 if exc.code in (429, 503) and attempt < self.max_attempts:
@@ -100,7 +122,9 @@ class HttpTransport:
                     continue
                 if exc.code == 429:
                     raise RateLimited(int(exc.headers.get("Retry-After", 60) or 60)) from exc
-                raise RegistryError(f"HTTP {exc.code} for {path}") from exc
+                raise RegistryError(
+                    f"HTTP {exc.code} for {path}: {self._error_detail(exc)}"
+                ) from exc
             except urllib.error.URLError as exc:
                 # Egress denial looks like this inside a sandboxed container.
                 raise RegistryError(
@@ -108,6 +132,32 @@ class HttpTransport:
                     "If this is a sandbox, add skills.sh to the network allowlist."
                 ) from exc
         raise RegistryError(f"exhausted {self.max_attempts} attempts for {path}")
+
+    def _read_rate_limit(self, headers) -> None:
+        """Record the documented rate-limit headers, present on every response."""
+        for attr, key in (
+            ("rate_limit_remaining", "X-RateLimit-Remaining"),
+            ("rate_limit_reset", "X-RateLimit-Reset"),
+        ):
+            try:
+                raw = headers.get(key)
+                if raw is not None:
+                    setattr(self, attr, int(raw))
+            except (TypeError, ValueError, AttributeError):
+                continue
+
+    @staticmethod
+    def _error_detail(exc) -> str:
+        """Pull `message` out of the documented error envelope.
+
+        Errors are `{"error": code, "message": text}`. Surfacing the message
+        turns "HTTP 400" into something a caller can act on.
+        """
+        try:
+            body = json.loads(exc.read().decode())
+        except Exception:
+            return "no detail"
+        return str(body.get("message") or body.get("error") or "no detail")
 
 
 class Registry:
@@ -132,12 +182,35 @@ class Registry:
         path = f"/api/v1/skills?view={view}&page={page}&per_page={per_page}"
         return self._get(path, TTL_LISTING).get("data", [])
 
-    def search(self, query: str, limit: int = 50) -> list[dict]:
+    def search(self, query: str, limit: int = 50, owner: str | None = None) -> list[dict]:
+        """Fuzzy for one word, semantic for several. `owner` scopes to a GitHub
+        owner across all of its repositories."""
         path = f"/api/v1/skills/search?q={urllib.parse.quote(query)}&limit={limit}"
+        if owner:
+            path += f"&owner={urllib.parse.quote(owner)}"
         return self._get(path, TTL_LISTING).get("data", [])
 
     def curated(self) -> list[dict]:
-        return self._get("/api/v1/skills/curated", TTL_CURATED).get("data", [])
+        """Flatten the curated set to skills.
+
+        This endpoint does not return skills. It returns **owner groups** --
+        `{owner, totalInstalls, featuredRepo, featuredSkill, skills: [...]}` --
+        and the skills are nested one level down. Returning `data` directly
+        handed owner dicts to `to_record`, which raised "name is required"
+        because an owner group has no `name`. The endpoint was unusable.
+        """
+        payload = self._get("/api/v1/skills/curated", TTL_CURATED)
+        skills: list[dict] = []
+        for group in payload.get("data", []):
+            if not isinstance(group, dict):
+                continue
+            nested = group.get("skills")
+            if isinstance(nested, list):
+                skills.extend(s for s in nested if isinstance(s, dict))
+            elif group.get("id"):
+                # Tolerate a flat list, in case the shape is ever simplified.
+                skills.append(group)
+        return skills
 
     def detail(self, skill_id: str) -> dict:
         return self._get(f"/api/v1/skills/{skill_id}", TTL_DETAIL)

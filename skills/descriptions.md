@@ -191,6 +191,40 @@ better than a marginal pack loading silently. Wire these into CI and under- and
 over-triggering fail in the build rather than in someone's session. See
 [evaluating.md](evaluating.md).
 
+## How common is this, really
+
+Swept across 921 public skills from five repositories, the missing-trigger check
+fires like this:
+
+| Repository | Skills | No trigger clause |
+|---|---|---|
+| `addyosmani/agent-skills` | 24 | **0%** |
+| `obra/superpowers` | 14 | **0%** |
+| `anthropics/skills` | 18 | 22% |
+| `ComposioHQ/awesome-claude-skills` | 864 | **98.8%** |
+
+Two things follow.
+
+**The defect is real and it is the norm in unreviewed corpora.** Those are not
+malformed files — they are ordinary, competent descriptions that say only what
+the skill does:
+
+> *Identifies high-quality leads for your product by analyzing your business,
+> searching for target companies, and providing actionable contact strategies.*
+
+That skill will not fire when someone asks to find leads, because nothing in it
+matches how a user phrases the request. Curated corpora sit near zero on the
+same check; the spread is the point.
+
+**A near-universal hit rate is normally a broken check, so verify before
+believing it.** 93% across the whole sweep looked exactly like the false
+positives that had already appeared four times in this codebase. It survived
+because 98.6% of flagged descriptions contained *no* trigger vocabulary at all
+under any phrasing — and the sweep did find 13 genuine misses, phrasings like
+"use this **before** any creative work", which are now matched. Uniformity
+within one repository is a finding; uniformity across all of them would have
+been a bug.
+
 ## Checklist
 
 - [ ] Third person, no "I" or "you"

@@ -30,6 +30,18 @@ rated Safe by Gen Agent Trust Hub and 0-alerts by Socket, while Snyk rates it
 three providers. An unfinished audit carries exactly as much assurance as no
 audit: none.
 
+## Providers
+
+Five now, not the three this model was first written against: **Gen Agent Trust
+Hub, Socket, Snyk, Runlayer, ZeroLeaks**. The list is informational —
+aggregation takes the worst verdict from whatever arrives, so a provider added
+next year is handled without a code change. `KNOWN_PROVIDERS` exists so a
+verdict's `providers` can be read against what was expected, not to filter.
+
+Two fields worth keeping: `slug` links to the per-provider detail page, and
+`categories` (Agent Trust Hub only, e.g. `["NO_CODE", "SAFE"]`) says what the
+provider actually classified.
+
 ## Aggregation
 
 Rank every provider on two ladders, take the worst:
@@ -73,7 +85,19 @@ that was actually vetted.
 
 ## Rate limits and caching
 
-60 req/min unauthenticated, 600 with a key. Capsule mirrors the documented
+**There is no unauthenticated tier.** Every endpoint answers 401 without a
+credential, so `--api-key` is required in practice rather than optional, and
+`--fixtures` is the only offline path.
+
+The credential is a **Vercel OIDC token**, not a long-lived API key: minted per
+request, scoped to a (team, project), rotating roughly every 12 hours. Capsule
+sends it as a bearer token, which is the documented form — but a token pasted
+into a config file stops working within the day. Read it from the environment
+(`VERCEL_OIDC_TOKEN`) each run.
+
+600 req/min per (team, project). Every response carries `X-RateLimit-Limit`,
+`X-RateLimit-Remaining` and `X-RateLimit-Reset`; `HttpTransport` records the
+last two so a caller can back off before being told to. Capsule mirrors the documented
 Cache-Control windows (60s listings, 300s detail/curated) and backs off on
 429/503 with `Retry-After`. A 404 on the audit endpoint means un-audited, which
 the trust gate treats as deny — never as clean.

@@ -433,7 +433,12 @@ _TRIGGER_CLAUSE = re.compile(
     r"(?:user|you|someone|a\s+user|working|asked|implementing|building|writing|creating)\b"
     r"|\btriggers?\s+(?:on|include|when)\b"
     r"|\bshould be used\b"
-    r"|\buse\s+(?:this\s+)?(?:skill\s+)?(?:for|if)\b",
+    r"|\buse\s+(?:this\s+)?(?:skill\s+)?(?:for|if)\b"
+    # Found by sweeping 921 public skills: a trigger can be stated as a point
+    # in a workflow ("use this before any creative work") rather than as a
+    # condition. Rare -- 13 of 859 flagged descriptions -- but a real clause.
+    r"|\buse\s+(?:this|it)\b[^.]{0,30}\b(?:before|after|during|whenever)\b"
+    r"|\bmust use (?:this|it)\b",
     re.IGNORECASE,
 )
 
