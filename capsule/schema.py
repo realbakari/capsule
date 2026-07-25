@@ -151,12 +151,6 @@ class RunContext:
     def of_lifecycle(self, lifecycle: str) -> list[SourceRecord]:
         return [r for r in self.records if r.lifecycle == lifecycle]
 
-    def of_category(self, category: str) -> list[SourceRecord]:
-        return [r for r in self.records if r.category == category]
-
-    def of_lifecycle(self, lifecycle: str) -> list[SourceRecord]:
-        return [r for r in self.records if r.lifecycle == lifecycle]
-
     def reconstructable(self) -> list[SourceRecord]:
         return [r for r in self.records if r.reconstructable]
 

@@ -136,8 +136,16 @@ def validate_references(pack_dir: str | Path) -> list[str]:
 
 
 def validate_pack(pack_dir: str | Path) -> tuple[bool, list[str]]:
-    """Return (ok, problems). An empty problem list means the pack is valid."""
+    """Return (ok, problems). An empty problem list means the pack is valid.
+
+    Accepts either a pack directory or the `SKILL.md` inside it. Tools that
+    hand over changed files -- pre-commit, CI matrices, `xargs` over `find` --
+    pass the file, and rejecting it produced "SKILL.md not found" on a pack
+    that was perfectly valid.
+    """
     pack = Path(pack_dir)
+    if pack.is_file() and pack.name == "SKILL.md":
+        pack = pack.parent
     problems: list[str] = []
 
     skill_md = pack / "SKILL.md"

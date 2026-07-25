@@ -1,12 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "capsule"
 version = "0.1.0"
 description = "Agent control plane for governed, replayable execution."
-requires-python = ">=3.10"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
+# tomllib is stdlib from 3.11. `config.py` and `rules.py` import it
+# unconditionally, so a 3.10 install produces a package that crashes the
+# moment anyone passes --config.
+requires-python = ">=3.11"
 dependencies = ["PyYAML>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/realbakari/capsule"
+Source = "https://github.com/realbakari/capsule"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 capsule = "capsule.cli:main"
+
+# `skills/` and `references/` are documentation directories, not packages, but
+# flat-layout autodiscovery treats them as importable and refuses to build at
+# all. Naming the one real package is the fix setuptools asks for.
+[tool.setuptools]
+packages = ["capsule"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

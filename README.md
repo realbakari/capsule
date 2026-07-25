@@ -6,25 +6,48 @@ Capsule inspects a workspace, condenses everything readable into a compact run
 context, routes a task to exactly one skill pack, and rebuilds skills as
 portable, license-gated, validated packages.
 
-## Install & Distribute
+## Install
 
-### 1. Install Skills via `npx skills` (Universal Agent Distribution)
-
-Install skills directly into Claude Code, Cursor, Codex, Windsurf, or GitHub Copilot:
+Requires Python 3.11+ (`tomllib` is stdlib from 3.11).
 
 ```bash
-# Install all skills from Capsule repository
-npx skills add realbakari/capsule
-
-# Or install a specific skill
-npx skills add realbakari/capsule --skill evaluating
+pip install git+https://github.com/realbakari/capsule
+capsule --help
 ```
 
-### 2. Python Control Plane CLI
+Or work on it locally:
 
 ```bash
-pip install pyyaml pytest
-python3 -m pytest -q
+git clone https://github.com/realbakari/capsule && cd capsule
+pip install -e ".[dev]"
+python3 -m pytest -q          # 240 tests; 33 skip without the /mnt/skills corpus
+```
+
+Either way you get the `capsule` console script; `python3 -m capsule.cli` works
+too. Nothing else is required — no config file (absent `capsule.toml` means
+built-in defaults), no network, no account.
+
+The **capsule skill** — the SKILL.md at this repo's root, which teaches an
+agent to drive the control plane — can be installed into a skills-compatible
+agent with:
+
+```bash
+npx skills add realbakari/capsule
+```
+
+That installs one skill. The `skills/` directory here is documentation for
+humans, not installable skills.
+
+As a **pre-commit hook** in another repo:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/realbakari/capsule
+    rev: main            # pin a tag once releases exist
+    hooks:
+      - id: capsule-validate
+      - id: capsule-doctor
 ```
 
 ## Use
@@ -260,7 +283,7 @@ description check. See [skills/descriptions.md](skills/descriptions.md).
 - `references/context-engineering.md` — the Claude 5 shift, and Capsule's self-audit
 - `references/adherence.md` — obligation contracts and diff verification
 - `references/harness.md` — deny rules, blocking hooks, untrusted-input tiers
-- `tests/test_capsule.py` — 197 tests; the executable specification
+- `tests/test_capsule.py` — 240 tests; the executable specification
   (33 need the `/mnt/skills` corpus and skip without it)
 
 ## Exit codes

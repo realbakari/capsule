@@ -340,6 +340,19 @@ def test_valid_pack_passes(tmp_path):
     assert ok, problems
 
 
+def test_validate_accepts_the_skill_md_path_itself(tmp_path):
+    """Regression: the published pre-commit hook never worked.
+
+    pre-commit passes changed filenames as arguments, so the hook invoked
+    `capsule validate skills/x/SKILL.md` -- and validate_pack rejected its own
+    entrypoint file with "SKILL.md not found" because it only accepted the
+    directory.
+    """
+    pack = _write_pack(tmp_path, "name: demo-skill\ndescription: A demo.")
+    ok, problems = validate_pack(pack / "SKILL.md")
+    assert ok, problems
+
+
 def test_missing_skill_md_fails(tmp_path):
     (tmp_path / "empty").mkdir()
     ok, problems = validate_pack(tmp_path / "empty")

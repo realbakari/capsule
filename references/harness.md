@@ -81,14 +81,21 @@ capsule harness --skill docx --dest ./.claude          # write the artifacts
 capsule harness --task "build a Word report" --dry-run # preview them
 ```
 
-Four files, and the command reports what each one buys:
+One merge into the file the project owns, and everything generated under a
+single directory that is safe to delete wholesale:
 
 ```
-wrote .claude/settings.json            [1 command prohibition(s) -> deny rules (never run)]
-wrote .claude/hooks/hooks.json         [wires the checker into PreToolUse for Write|Edit]
-wrote .claude/capsule-hook.py          [3 content prohibition(s) -> blocked before the write lands]
-wrote .claude/.claude-plugin/plugin.json [makes the pack installable as a single-skill plugin]
+merged into .claude/settings.json  (2 deny rule(s) total)
+wrote .claude/capsule/hooks.json
+wrote .claude/capsule/capsule-hook.py
+wrote .claude/capsule/README.md
 ```
+
+`settings.json` is **merged, never overwritten**: deny lists are unioned, the
+project's `allow`, `env` and own denials are untouched, and the rules Capsule
+manages are listed under `_capsule.managed_deny` so re-running is visibly
+idempotent. An earlier version overwrote the file — which deleted a project's
+own `Bash(rm -rf *)` denial while installing a security control.
 
 Emission goes through the same write gate as everything else — pointing `--dest`
 at a read-only mount is refused, not warned about.

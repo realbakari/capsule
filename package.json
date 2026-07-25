@@ -6,6 +6,5 @@
     "type": "git",
     "url": "https://github.com/realbakari/capsule"
   },
-  "license": "MIT",
-  "skills": "skills/"
+  "license": "Apache-2.0"
 }

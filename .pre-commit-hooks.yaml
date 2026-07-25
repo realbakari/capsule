@@ -1,15 +1,28 @@
+# Hooks consumers get by adding this repo to their .pre-commit-config.yaml.
+#
+# `files` matches SKILL.md itself rather than every markdown file. pre-commit
+# passes changed filenames as arguments, so the previous pattern -- types:
+# [markdown] scoped to ^skills/ -- handed arbitrary .md files to a command that
+# expects a pack directory, and every run failed with "SKILL.md not found".
+#
+# `entry` uses the installed console script. `python3 -m capsule.cli` only works
+# when the repo happens to be the working directory.
+
 - id: capsule-validate
-  name: Capsule Validate Skill Packs
-  description: Validates skill pack SKILL.md frontmatter, kebab-case names, and reference link integrity.
-  entry: python3 -m capsule.cli validate
+  name: Capsule — validate skill packs
+  description: >-
+    Checks SKILL.md frontmatter, kebab-case names, description limits, and that
+    every bundled reference is reachable.
+  entry: capsule validate
   language: python
-  types: [markdown]
-  files: ^skills/
+  files: (^|/)SKILL\.md$
 
 - id: capsule-doctor
-  name: Capsule Skill Doctor Audit
-  description: Audits skill packs for progressive disclosure, prescription altitude, and word budgets.
-  entry: python3 -m capsule.cli doctor
+  name: Capsule — audit skill calibration
+  description: >-
+    Flags over-prescription, contradictory directives, monolithic bodies, and
+    the instruction patterns that degrade current-generation models.
+  entry: capsule doctor --severity medium
   language: python
-  types: [markdown]
-  files: ^skills/
+  files: (^|/)SKILL\.md$
+  pass_filenames: false
