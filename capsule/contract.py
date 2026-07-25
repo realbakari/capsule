@@ -62,6 +62,16 @@ class Obligation:
     def checkable(self) -> bool:
         return self.kind != ADVISORY
 
+    def line(self) -> str:
+        """One-line form used when listing what a contract will enforce."""
+        verb = {
+            FORBID: "must not use",
+            REQUIRE: "must use",
+            PLACEMENT: "must write under",
+        }.get(self.kind, "advisory")
+        target = self.path_pattern if self.kind == PLACEMENT else self.token
+        return f"{self.id:<14} {verb} `{target}`"
+
 
 @dataclass
 class Contract:
@@ -81,6 +91,21 @@ class Contract:
         if not self.obligations:
             return 0.0
         return len(self.checkable) / len(self.obligations)
+
+    def summary(self) -> str:
+        """Header for `capsule contract`.
+
+        Coverage is stated up front rather than buried, because the number is
+        usually low and an author who does not see it will assume the whole
+        skill is enforced.
+        """
+        checkable, advisory = len(self.checkable), len(self.advisory)
+        pct = int(round(self.coverage * 100))
+        return (
+            f"contract for {self.skill_name}: "
+            f"{checkable} enforceable, {advisory} advisory "
+            f"({pct}% coverage — the rest is taste and is not checked)"
+        )
 
 
 @dataclass
@@ -165,6 +190,33 @@ class Changeset:
                 added.append((current_path, line[1:]))
 
         return cls(paths=paths, added_lines=added)
+
+    @classmethod
+    def from_git(cls, repo: str | Path = ".", ref: Optional[str] = None) -> Changeset:
+        """Read a diff straight out of a git working tree.
+
+        This is the path that makes `verify` usable as a pre-commit hook or a
+        CI gate: `--ref=--cached` checks what is staged, `--ref main` checks a
+        branch against its base. Failures raise `RuntimeError` so the caller
+        can distinguish "could not read the change" from "the change is bad" --
+        reporting an unreadable diff as adherent would be the worst outcome.
+        """
+        command = ["git", "-C", str(repo), "diff", "--no-color"]
+        if ref:
+            command.append(ref)
+
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, check=False, timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(f"could not run git: {exc}") from exc
+
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip().splitlines()
+            raise RuntimeError(detail[0] if detail else f"git exited {result.returncode}")
+
+        return cls.from_diff(result.stdout)
 
     @classmethod
     def from_paths(cls, file_paths: Sequence[str | Path], root: Optional[Path] = None) -> Changeset:

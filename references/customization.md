@@ -111,13 +111,24 @@ whether or not it changed the outcome.
 
 ## Diagnostics: `capsule lint`
 
-Runs three things no per-skill validator can:
+Runs four things no per-skill validator can:
 
 - **Rule + trifecta scan** over every skill body and its scripts.
+- **Description quality** — per skill, the two defects that stop a skill firing:
+  a description written in first or second person (the text is injected into a
+  system prompt, and mixed point-of-view degrades discovery), and a description
+  that states what the skill does but never when to use it. Under-triggering is
+  the common failure, so a missing trigger clause is a real defect rather than a
+  style note.
 - **Description budget** — total description size vs. the truncation line, naming
   which skills sit past it. Silent truncation stops skills firing with no error.
 - **Trigger overlap** — pairwise trigger-vocabulary collisions, the main driver
   of routing ambiguity. Compares tokens, not whole phrases, so it catches real
   vocabulary overlap rather than trivially-distinct strings.
+
+The trigger-clause matcher is deliberately generous. It was tightened after
+running against the installed marketplace corpus, where `Use whenever the user
+plugs in...` was flagged as having no trigger clause — a check that fails a
+correctly-written description teaches authors to route around it.
 
 See `references/limitations.md` for what each diagnostic can and cannot tell you.

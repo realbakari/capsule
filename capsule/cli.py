@@ -19,17 +19,17 @@ import json
 import sys
 from pathlib import Path
 
-from .color import bold, cyan, dim, fail_badge, green, pass_badge, red, warn_badge, yellow
+from .color import bold, cyan, dim, fail_badge, green, red, warn_badge
 from .config import CapsuleConfig, description_budget, lethal_trifecta, trigger_overlap
 from .contract import Changeset, brief, contract_for_skill, verify
-from .doctor import SkillAudit, audit_context, audit_skill
-from .evals import EvalSuite, load_evals, run_eval
+from .doctor import audit_context
+from .evals import load_evals, run_eval
 from .harness import (
     ArtifactEntry, SkillMeta, classify_input_provenance,
     emit_all, emit_all_plugins, split_obligations,
 )
-from .discover import discover
-from .health import analyze, summarize
+from .discover import discover, parse_frontmatter
+from .health import analyze, description_quality, summarize
 from .registry import FixtureTransport, HttpTransport, Registry, RegistryError
 from .policy import Policy, PolicyError
 from .reconstruct import package, reconstruct
@@ -38,7 +38,7 @@ from .schema import RunContext
 from .schema_export import export_schemas
 from .validate import validate_pack
 
-DEFAULT_ROOTS = ["/mnt/skills/public", "/mnt/skills/examples", "/mnt/user-data/uploads"]
+DEFAULT_ROOTS = ["./skills", "./packs"]
 
 
 def _config(args: argparse.Namespace) -> CapsuleConfig:
@@ -133,6 +133,101 @@ def cmd_route(args: argparse.Namespace) -> int:
     return 0 if routing.selected else 2
 
 
+def cmd_reconstruct(args: argparse.Namespace) -> int:
+    context = _load(args.index)
+    policy = _policy(args)
+    records = [context.by_name(args.skill)] if args.skill else context.of_type("skill")
+    records = [record for record in records if record is not None]
+
+    if args.skill and not records:
+        print(f"skill not found in index: {args.skill}", file=sys.stderr)
+        return 1
+
+    if not records:
+        print("no skills found to reconstruct", file=sys.stderr)
+        return 1
+
+    ok = True
+    for record in records:
+        try:
+            result = reconstruct(record, args.dest, policy, overwrite=args.overwrite)
+            print(result.line())
+            if args.package:
+                archive = package(result.destination, args.dest, policy)
+                print(f"  packaged -> {archive}")
+            if not result.valid:
+                ok = False
+        except PolicyError as exc:
+            ok = False
+            print(f"{record.name}: denied -- {exc}", file=sys.stderr)
+        except RuntimeError as exc:
+            ok = False
+            print(f"{record.name}: failed -- {exc}", file=sys.stderr)
+
+    audit = policy.audit_text()
+    if audit and getattr(args, "audit", False):
+        print("\npolicy audit:")
+        print(audit)
+
+    return 0 if ok else 1
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    paths = list(args.paths or [])
+    if args.pack:
+        paths.append(args.pack)
+    if not paths:
+        print("no pack paths supplied", file=sys.stderr)
+        return 1
+
+    ok = True
+    for pack_path in paths:
+        valid, problems = validate_pack(pack_path)
+        if valid:
+            print(f"{pack_path}: valid")
+        else:
+            ok = False
+            print(f"{pack_path}: invalid")
+            for problem in problems:
+                print(f"  - {problem}")
+    return 0 if ok else 1
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    context = _load(args.index)
+    cfg = _config(args)
+
+    budget = description_budget(context, cfg.description_budget)
+    print(budget.line() if hasattr(budget, "line") else f"description budget: {budget.total_chars} chars")
+
+    overlap = trigger_overlap(context)
+    worst = overlap.worst() if hasattr(overlap, "worst") else sorted(overlap.pairs, key=lambda p: -p[2])[:5]
+    if worst:
+        print("trigger overlap:")
+        for a, b, score in worst:
+            print(f"  {a} <-> {b}: {score:.2f}")
+    else:
+        print("trigger overlap: none")
+
+    trifectas = []
+    for record in context.of_type("skill"):
+        skill_md = Path(record.source_path) / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        report = lethal_trifecta(record, skill_md.read_text(errors="replace"))
+        if report.complete:
+            trifectas.append(report)
+
+    if trifectas:
+        print("lethal trifecta:")
+        for report in trifectas:
+            print(f"  {report.line()}")
+        return 1
+
+    print("lethal trifecta: none")
+    return 0
+
+
 def cmd_eval(args: argparse.Namespace) -> int:
     """Run skill evaluations against provided output."""
     evals_path = Path(args.evals)
@@ -211,25 +306,304 @@ def cmd_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+_SEVERITY_FLOOR = {"high": 0, "medium": 1, "low": 2, "info": 3}
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
-    """Model calibration doctor."""
+    """Assess each skill's calibration for current-generation models.
+
+    Two analyses, deliberately kept distinct. `health` measures instruction
+    altitude and the refusal-risk checks; `doctor` measures body budget and
+    verification-loop triggers. They answer different questions, so both print.
+    """
     index_path = getattr(args, "index", None)
     if index_path and Path(index_path).exists():
         context = _load(index_path)
-        audits = audit_context(context)
     else:
-        # Audit skills/ in current dir
         context = discover(["."], Policy())
-        audits = audit_context(context)
 
-    if not audits:
+    skills = context.of_type("skill")
+    if not skills:
         print("no skills found for doctor audit")
         return 0
 
-    print(bold("Capsule Doctor — Model Calibration Audit:"))
-    print("-" * 60)
-    for a in audits:
-        print(a.report())
+    reports = []
+    for record in skills:
+        skill_md = Path(record.source_path) / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        body = skill_md.read_text(errors="replace")
+        aux = sum(
+            1 for f in Path(record.source_path).rglob("*")
+            if f.is_file() and f.name != "SKILL.md"
+        )
+        reports.append(analyze(record, body, aux))
+
+    budget_findings = {a.name: a.diagnostics for a in audit_context(context)}
+
+    floor = _SEVERITY_FLOOR.get(getattr(args, "severity", "low") or "low", 2)
+    show_all = getattr(args, "all", False)
+
+    print(bold("Capsule Doctor — model calibration"))
+    print("-" * 68)
+
+    shown = 0
+    for report in sorted(reports, key=lambda r: (_SEVERITY_FLOOR[r.worst_severity],
+                                                 -r.prescriptiveness)):
+        visible = [f for f in report.findings
+                   if _SEVERITY_FLOOR.get(f.severity, 3) <= floor]
+        extra = budget_findings.get(report.record.name, [])
+        if not visible and not extra and not show_all:
+            continue
+        shown += 1
+        print(report.line())
+        for finding in visible:
+            print(f"     {finding.line()}")
+        for diag in extra:
+            print(f"     [{diag.severity}] {diag.kind}: {diag.message}")
+
+    counts = summarize(reports)
+    print(
+        f"\n{len(reports)} skill(s): {counts['high']} high, {counts['medium']} medium, "
+        f"{counts['low']} low, {counts['clean']} clean"
+    )
+    if not show_all and shown == 0:
+        print("nothing at or above the requested severity; pass --all to see every skill")
+    print(
+        "\nAltitude excludes security invariants from the prescriptiveness count. "
+        "A high behavioral count is a prompt to review, not a defect."
+    )
+    return 1 if counts["high"] else 0
+
+
+def cmd_lint(args: argparse.Namespace) -> int:
+    """Custom rules, trifecta detection, and the two corpus-level diagnostics."""
+    context = _load(args.index)
+    policy = _policy(args)
+    cfg = _config(args)
+
+    print(bold("== custom rules =="))
+    flagged = 0
+    for record in context.of_type("skill"):
+        body_path = Path(record.source_path) / "SKILL.md"
+        body = body_path.read_text(errors="replace") if body_path.exists() else ""
+        for aux in ("scripts", "core"):
+            aux_dir = Path(record.source_path) / aux
+            if aux_dir.exists():
+                for f in sorted(aux_dir.rglob("*")):
+                    if f.is_file() and f.suffix in (".py", ".sh", ".js", ".md"):
+                        body += "\n" + f.read_text(errors="replace")
+
+        decision = policy.apply_rules(record, body)
+        if not decision.allowed or "flagged" in decision.reason:
+            flagged += 1
+            print(f"  {warn_badge()} {record.name}: {decision.reason[:160]}")
+
+        trifecta = lethal_trifecta(record, body)
+        if trifecta.complete:
+            print(f"  {fail_badge()} {trifecta.line()}")
+        provenance = classify_input_provenance(record.name, body)
+        if provenance.tier == "live":
+            print(f"  {warn_badge()} {provenance.line()}")
+    print(f"  {flagged} skill(s) matched at least one rule\n")
+
+    print(bold("== description quality =="))
+    weak = 0
+    for record in context.of_type("skill"):
+        body_path = Path(record.source_path) / "SKILL.md"
+        if not body_path.exists():
+            continue
+        front = parse_frontmatter(body_path.read_text(errors="replace"))
+        findings = description_quality(str(front.get("description") or ""))
+        if findings:
+            weak += 1
+            print(f"  {record.name}:")
+            for finding in findings:
+                print(f"     {finding.line()}")
+    if not weak:
+        print(f"  {green('every description names both what it does and when to use it')}")
+    print()
+
+    print(bold("== corpus diagnostics =="))
+    budget = description_budget(context, cfg.description_budget)
+    print(f"  {budget.line()}")
+    if budget.at_risk:
+        print(f"  {red('at risk of silent truncation')}: {', '.join(budget.at_risk[:6])}")
+
+    overlap = trigger_overlap(context)
+    if overlap.pairs:
+        print("  trigger-phrase collisions (routing ambiguity risk):")
+        for a, b, score in overlap.worst():
+            print(f"    {a} <-> {b}  jaccard={score}")
+    else:
+        print(f"  {green('no trigger-phrase collisions above threshold')}")
+    return 0
+
+
+def _select(args: argparse.Namespace):
+    """Resolve a skill by name, or by routing the task to one."""
+    context = _load(args.index)
+    if getattr(args, "skill", None):
+        record = context.by_name(args.skill)
+        if record is None:
+            sys.exit(f"no skill named {args.skill!r} in the index")
+        return record, ""
+    if not getattr(args, "task", None):
+        sys.exit('pass either --skill NAME or --task "..."')
+
+    cfg = _config(args)
+    routing = route(context, args.task, shortlist_size=cfg.shortlist_size,
+                    min_score=cfg.min_route_score, policy=_policy(args),
+                    precedence=cfg.precedence)
+    if routing.selected is None:
+        print(f"no pack selected: {routing.rationale}", file=sys.stderr)
+        sys.exit(2)
+    return routing.selected, routing.rationale
+
+
+def cmd_brief(args: argparse.Namespace) -> int:
+    """Emit an injectable activation block for the selected pack."""
+    record, rationale = _select(args)
+    print(brief(record, contract_for_skill(record), rationale))
+    return 0
+
+
+def cmd_contract(args: argparse.Namespace) -> int:
+    """Show the obligations extracted from a skill."""
+    record, _ = _select(args)
+    contract = contract_for_skill(record)
+    print(contract.summary())
+    print()
+    for obligation in contract.checkable:
+        print(f"  {obligation.line()}")
+    if contract.advisory and args.advisory:
+        print("\nadvisory (not mechanically checkable):")
+        for obligation in contract.advisory[:20]:
+            print(f"  - {obligation.directive[:110]}")
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Check a change against the selected skill's contract.
+
+    Exit 5 on violation, so this drops into a pre-commit hook or a CI job
+    unchanged. That is the point: adherence becomes a property of the diff
+    rather than of whether the agent read the pack.
+    """
+    record, _ = _select(args)
+
+    # An unreadable body yields an empty contract, and an empty contract is
+    # adherent by construction. Reporting that as a pass is worse than
+    # erroring: the gate looks green while enforcing nothing.
+    skill_md = Path(record.source_path) / "SKILL.md"
+    if not skill_md.exists():
+        print(
+            f"cannot read {skill_md}: nothing to enforce. "
+            "Rebuild the index (`capsule index`) or pass --skill for a skill "
+            "that is still on disk.",
+            file=sys.stderr,
+        )
+        return 4
+
+    contract = contract_for_skill(record)
+    if not contract.obligations:
+        print(
+            f"{record.name} yields no mechanically checkable obligations; "
+            "nothing to verify.",
+            file=sys.stderr,
+        )
+        return 0
+
+    try:
+        if args.paths:
+            changeset = Changeset.from_paths(args.paths, root=args.repo)
+        elif args.diff:
+            changeset = Changeset.from_diff(Path(args.diff).read_text())
+        else:
+            changeset = Changeset.from_git(args.repo, ref=args.ref)
+    except (RuntimeError, OSError) as exc:
+        print(f"could not read changes: {exc}", file=sys.stderr)
+        return 4
+
+    if changeset.is_empty():
+        print("no changes to verify")
+        return 0
+
+    report = verify(contract, changeset)
+    print(report.report())
+    return 5 if report.violations else 0
+
+
+def cmd_harness(args: argparse.Namespace) -> int:
+    """Push a contract into the host's own enforcement primitives."""
+    record, _ = _select(args)
+    contract = contract_for_skill(record)
+    commands, contents = split_obligations(contract)
+
+    emissions = emit_all(contract, args.dest)
+    if args.dry_run:
+        for emission in emissions:
+            print(bold(f"--- {emission.path}"))
+            print(emission.content)
+        return 0
+
+    policy = _policy(args)
+    dest = Path(args.dest)
+    decision = policy.can_write(dest)
+    if not decision.allowed:
+        print(f"refusing to write: {decision.reason}", file=sys.stderr)
+        return 3
+
+    for emission in emissions:
+        target = dest / emission.path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(emission.content)
+        if target.suffix == ".py":
+            target.chmod(0o755)
+        print(f"wrote {green(str(target))}")
+
+    print(
+        f"\n{len(commands)} prohibition(s) never run (deny rules); "
+        f"{len(contents)} blocked before the write lands (PreToolUse hook)."
+    )
+    print(
+        "Hook payload field names are harness-specific. Verify with "
+        "CAPSULE_HOOK_DEBUG=1 before relying on the hook; it fails open when it "
+        "recognises nothing."
+    )
+    return 0
+
+
+def cmd_registry(args: argparse.Namespace) -> int:
+    """Pull registry skills, apply the trust gate, optionally merge the records."""
+    policy = _policy(args)
+    registry = _registry(args)
+    try:
+        entries = (registry.search(args.query, limit=args.limit) if args.query
+                   else registry.leaderboard(per_page=args.limit))
+    except RegistryError as exc:
+        print(f"registry unavailable: {exc}", file=sys.stderr)
+        return 4
+
+    records = [registry.to_record(e) for e in entries]
+    allowed = 0
+    for record in records:
+        decision = policy.can_load(record)
+        mark = green("LOAD ") if decision.allowed else red("BLOCK")
+        allowed += decision.allowed
+        print(f"{mark} {record.name:<28} installs={record.installs:<9} "
+              f"trust={record.trust_verdict}/{record.trust_risk or 'n-a'}")
+        if not decision.allowed:
+            print(f"        reason: {decision.reason}")
+
+    print(f"\n{allowed} loadable, {len(records) - allowed} blocked by the trust gate")
+
+    if args.merge:
+        context = _load(args.index)
+        context.records = [r for r in context.records if r.source_type != "registry"]
+        context.records.extend(records)
+        Path(args.index).write_text(context.to_json())
+        print(f"merged {len(records)} registry record(s) into {args.index}")
     return 0
 
 
@@ -242,6 +616,7 @@ def main(argv: list[str] | None = None) -> int:
     p_index.add_argument("--out", default="capsule-index.json")
     p_index.add_argument("--by-category", action="store_true")
     p_index.add_argument("--lifecycle")
+    p_index.add_argument("--config")
 
     p_show = subparsers.add_parser("show")
     p_show.add_argument("--index", default="capsule-index.json")
@@ -250,6 +625,26 @@ def main(argv: list[str] | None = None) -> int:
     p_route = subparsers.add_parser("route")
     p_route.add_argument("--index", default="capsule-index.json")
     p_route.add_argument("--task", required=True)
+    p_route.add_argument("--config")
+
+    p_reconstruct = subparsers.add_parser("reconstruct")
+    p_reconstruct.add_argument("--index", default="capsule-index.json")
+    p_reconstruct.add_argument("--skill")
+    p_reconstruct.add_argument("--dest", default="./packs")
+    p_reconstruct.add_argument("--config")
+    p_reconstruct.add_argument("--overwrite", action="store_true")
+    p_reconstruct.add_argument("--package", action="store_true")
+    p_reconstruct.add_argument("--audit", action="store_true")
+    p_reconstruct.add_argument("--allow-restricted", action="store_true")
+    p_reconstruct.add_argument("--allow-unaudited", action="store_true")
+
+    p_validate = subparsers.add_parser("validate")
+    p_validate.add_argument("paths", nargs="*")
+    p_validate.add_argument("--pack")
+
+    p_audit = subparsers.add_parser("audit")
+    p_audit.add_argument("--index", default="capsule-index.json")
+    p_audit.add_argument("--config")
 
     p_eval = subparsers.add_parser("eval")
     p_eval.add_argument("--evals", required=True, help="Path to evals directory or evals.json")
@@ -265,28 +660,89 @@ def main(argv: list[str] | None = None) -> int:
 
     p_doctor = subparsers.add_parser("doctor")
     p_doctor.add_argument("--index", help="Path to capsule-index.json")
+    p_doctor.add_argument("--severity", default="low",
+                          choices=["high", "medium", "low", "info"],
+                          help="minimum severity to display (default: low)")
+    p_doctor.add_argument("--all", action="store_true",
+                          help="show every skill, including clean ones")
+
+    p_lint = subparsers.add_parser("lint", help="custom rules and corpus diagnostics")
+    p_lint.add_argument("--index", default="capsule-index.json")
+    p_lint.add_argument("--config")
+
+    # brief/contract/verify/harness all resolve a skill the same way: by name,
+    # or by routing a task to one.
+    for name, help_text in (
+        ("brief", "emit an injectable activation block for a task"),
+        ("contract", "show the obligations extracted from a skill"),
+        ("verify", "check a diff against a skill's contract"),
+        ("harness", "generate deny rules and a PreToolUse hook from a contract"),
+    ):
+        p = subparsers.add_parser(name, help=help_text)
+        p.add_argument("--index", default="capsule-index.json")
+        p.add_argument("--skill", default=None)
+        p.add_argument("--task", default=None)
+        p.add_argument("--config")
+        if name == "contract":
+            p.add_argument("--advisory", action="store_true",
+                           help="also list the directives that cannot be verified")
+        if name == "verify":
+            p.add_argument("--repo", default=".", help="git repo to diff (default: cwd)")
+            p.add_argument("--ref", default=None, help="git diff ref, e.g. --cached or main")
+            p.add_argument("--diff", default=None, help="read a unified diff from a file")
+            p.add_argument("--paths", nargs="*", default=None,
+                           help="verify whole files instead of a diff")
+        if name == "harness":
+            p.add_argument("--dest", default="./.claude")
+            p.add_argument("--dry-run", action="store_true", help="print instead of writing")
+
+    p_registry = subparsers.add_parser("registry", help="query skills.sh and apply the trust gate")
+    p_registry.add_argument("--query", default=None, help="search instead of the leaderboard")
+    p_registry.add_argument("--limit", type=int, default=5)
+    p_registry.add_argument("--fixtures", default=None, help="replay recorded responses offline")
+    p_registry.add_argument("--api-key", default=None)
+    p_registry.add_argument("--allow-unaudited", action="store_true",
+                            help="let warn/medium skills load (never fail/high/critical)")
+    p_registry.add_argument("--merge", action="store_true", help="write records into the index")
+    p_registry.add_argument("--index", default="capsule-index.json")
+    p_registry.add_argument("--config")
+
+    # A table rather than an if/elif chain: registering a subparser without
+    # wiring its handler is how `lint`, `registry`, `brief`, `contract`,
+    # `verify` and `harness` went missing from the CLI while staying in the
+    # docs. A missing key here is a KeyError at startup, not a silent no-op.
+    handlers = {
+        "index": cmd_index,
+        "show": cmd_show,
+        "route": cmd_route,
+        "reconstruct": cmd_reconstruct,
+        "validate": cmd_validate,
+        "audit": cmd_audit,
+        "eval": cmd_eval,
+        "emit-plugins": cmd_emit_plugins,
+        "schema": cmd_schema,
+        "doctor": cmd_doctor,
+        "lint": cmd_lint,
+        "brief": cmd_brief,
+        "contract": cmd_contract,
+        "verify": cmd_verify,
+        "harness": cmd_harness,
+        "registry": cmd_registry,
+    }
 
     args = parser.parse_args(argv)
-    if args.subcommand == "index":
-        return cmd_index(args)
-    elif args.subcommand == "show":
-        return cmd_show(args)
-    elif args.subcommand == "route":
-        return cmd_route(args)
-    elif args.subcommand == "eval":
-        return cmd_eval(args)
-    elif args.subcommand == "emit-plugins":
-        return cmd_emit_plugins(args)
-    elif args.subcommand == "schema":
-        return cmd_schema(args)
-    elif args.subcommand == "doctor":
-        return cmd_doctor(args)
-    else:
+    handler = handlers.get(args.subcommand)
+    if handler is None:
         parser.print_help()
         return 0
+
+    try:
+        return handler(args)
+    except PolicyError as exc:
+        print(f"policy refusal: {exc}", file=sys.stderr)
+        return 3
 
 
 if __name__ == "__main__":
     sys.exit(main())
-
 

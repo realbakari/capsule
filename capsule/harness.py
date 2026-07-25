@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .contract import FORBID, PLACEMENT, Contract, Obligation
+from .contract import FORBID, Contract, Obligation
 
 _COMMAND_HEADS = (
     "npm", "npx", "pnpm", "yarn", "pip", "pip3", "python", "python3", "node",
@@ -25,6 +25,15 @@ class Provenance:
     tier: str
     rank: int
     evidence: str = ""
+
+    def line(self) -> str:
+        """One-line form for `capsule lint`.
+
+        The tier measures how a skill ingests external content, not whether it
+        is trustworthy: a scraper is legitimate and still lands in `live`.
+        """
+        detail = f" ({self.evidence})" if self.evidence else ""
+        return f"untrusted-input tier: {self.tier}{detail}"
 
 
 def is_command_token(token: str) -> bool:

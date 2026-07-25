@@ -1,0 +1,27 @@
+{
+  "query": "powerpoint",
+  "data": [
+    {
+      "id": "anthropics/skills/pptx",
+      "source": "anthropics/skills",
+      "slug": "pptx",
+      "name": "PowerPoint (pptx)",
+      "installs": 918400,
+      "isDuplicate": false,
+      "hash": "a7ff03e2c85b636f",
+      "url": "https://skills.sh/anthropics/skills/pptx",
+      "installUrl": "anthropics/skills/pptx"
+    },
+    {
+      "id": "vercel-labs/skills/deck-builder",
+      "source": "vercel-labs/skills",
+      "slug": "deck-builder",
+      "name": "Deck Builder",
+      "installs": 74300,
+      "isDuplicate": false,
+      "hash": "3ca70b19d8e4f201",
+      "url": "https://skills.sh/vercel-labs/skills/deck-builder",
+      "installUrl": "vercel-labs/skills/deck-builder"
+    }
+  ]
+}

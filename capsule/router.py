@@ -1,129 +1,282 @@
-"""Capsule routing engine."""
+"""Routing: task -> intent/domain -> shortlist -> full-body rerank -> selection.
+
+The contract requires that candidates be *inspected in full* before one is
+selected, not chosen from the index alone. That is why routing is two-stage:
+stage one is cheap and index-only, stage two reads bodies for the shortlist and
+can overturn the stage-one ordering. Every selection carries its rationale.
+"""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
-from .schema import RunContext, SourceRecord
+from pathlib import Path
+
 from .policy import Policy
-from .config import Precedence
+from .schema import RunContext, SourceRecord
+
+_STOPWORDS = {
+    "a", "an", "the", "and", "or", "for", "to", "of", "in", "on", "with", "my",
+    "me", "i", "please", "can", "you", "help", "make", "create", "this", "that",
+    "it", "is", "are", "do", "how", "what", "some", "want", "need", "from",
+}
+
+# Intent taxonomy. Broad on purpose: intent narrows the candidate pool, domain
+# and body evidence do the fine-grained work.
+_INTENT_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("create", ("create", "make", "build", "generate", "write", "draft", "design")),
+    ("edit", ("edit", "fix", "update", "modify", "change", "revise", "clean")),
+    ("read", ("read", "extract", "parse", "summarize", "inspect", "open", "analyze")),
+    ("convert", ("convert", "transform", "export", "turn into")),
+    ("execute", ("order", "book", "submit", "file", "cancel", "refill", "return", "call")),
+]
+
+_DOMAIN_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("document", ("docx", "word", "document", "report", "memo", "letter")),
+    ("presentation", ("pptx", "slide", "deck", "presentation")),
+    ("spreadsheet", ("xlsx", "csv", "spreadsheet", "excel", "formula")),
+    ("pdf", ("pdf", "form fill", "watermark")),
+    ("skill", ("skill", "skill.md", "mcp", "eval")),
+    ("visual", ("art", "poster", "theme", "gif", "paint", "design", "ui", "frontend")),
+    ("writing", ("blog", "comms", "voice", "style", "documentation")),
+    ("commerce", ("grocery", "delivery", "refund", "subscription", "shopping")),
+    ("admin", ("expense", "reimbursement", "prescription", "appointment", "jury")),
+]
 
 
-def _mentions(text: str, record: SourceRecord | str) -> bool:
-    target_name = record.name if hasattr(record, "name") else str(record)
-    task_lower = text.lower()
-    target_lower = target_name.lower()
+def _tokens(text: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9.]+", text.lower()) if t not in _STOPWORDS and len(t) > 1}
 
-    pattern = rf"\b{re.escape(target_lower)}(es|s)?\b"
-    if re.search(pattern, task_lower):
-        return True
-    if target_lower.endswith("y"):
-        stem = target_lower[:-1]
-        if re.search(rf"\b{re.escape(stem)}ies\b", task_lower):
-            return True
-    if hasattr(record, "trigger_phrases"):
-        for phrase in record.trigger_phrases:
-            phrase_lower = phrase.lower()
-            if re.search(rf"\b{re.escape(phrase_lower)}\b", task_lower):
-                return True
-    return False
+
+def _mentions(haystack: str, needle: str) -> bool:
+    """Word-boundary containment.
+
+    Plain substring matching silently misfires: 'art' matches inside 'party',
+    which routed a grocery order into the visual-design domain. Multi-word
+    needles are matched as phrases with boundaries at each end.
+    """
+    # Tolerate a simple plural/verb suffix so 'grocery' matches 'groceries'
+    # without pulling in full stemming.
+    stem = re.escape(needle[:-1]) + "(?:y|ies)" if needle.endswith("y") else re.escape(needle) + "s?"
+    return re.search(rf"(?<!\w){stem}(?!\w)", haystack) is not None
+
+
+@dataclass
+class Candidate:
+    record: SourceRecord
+    stage1_score: float = 0.0
+    stage2_score: float = 0.0
+    evidence: list[str] = field(default_factory=list)
+    body_read: bool = False
+
+    @property
+    def score(self) -> float:
+        return self.stage2_score if self.body_read else self.stage1_score
+
+
+@dataclass
+class Routing:
+    task: str
+    intent: str
+    domain: str
+    selected: SourceRecord | None
+    rationale: str
+    considered: list[Candidate] = field(default_factory=list)
+    reranked: bool = False
+    confident: bool = True
+    blocked: list[str] = field(default_factory=list)
+    precedence_applied: list[str] = field(default_factory=list)
+
+    def report(self) -> str:
+        lines = [
+            f"task     : {self.task}",
+            f"intent   : {self.intent}",
+            f"domain   : {self.domain}",
+            f"selected : {self.selected.name if self.selected else '<none>'}",
+            f"rationale: {self.rationale}",
+        ]
+        if self.considered:
+            lines.append("considered:")
+            for c in sorted(self.considered, key=lambda x: -x.score)[:5]:
+                mark = "*" if self.selected and c.record.name == self.selected.name else " "
+                stage = "full-body" if c.body_read else "index-only"
+                lines.append(f"  {mark} {c.record.name:<26} {c.score:5.2f}  ({stage})")
+                for e in c.evidence[:2]:
+                    lines.append(f"      evidence: {e}")
+        if self.blocked:
+            lines.append("blocked by trust gate:")
+            for b in self.blocked[:5]:
+                lines.append(f"    - {b}")
+        return "\n".join(lines)
 
 
 def classify(task: str) -> tuple[str, str]:
-    task_lower = task.lower()
-    if "pptx" in task_lower or "deck" in task_lower:
-        return "create", "presentation"
-    if "formula" in task_lower or "spreadsheet" in task_lower or "xlsx" in task_lower:
-        return "edit", "spreadsheet"
-    return "general", "general"
+    lowered = task.lower()
+    intent = next((i for i, kws in _INTENT_RULES if any(_mentions(lowered, k) for k in kws)), "unknown")
+    domain = next((d for d, kws in _DOMAIN_RULES if any(_mentions(lowered, k) for k in kws)), "general")
+    return intent, domain
 
 
-@dataclass
-class CandidateScore:
-    record: SourceRecord
-    score: float
-    reason: str = ""
-    body_read: bool = True
+def _stage1(task: str, record: SourceRecord) -> tuple[float, list[str]]:
+    task_tokens = _tokens(task)
+    score = 0.0
+    evidence: list[str] = []
+
+    for phrase in record.trigger_phrases:
+        phrase_l = phrase.lower().strip()
+        if not phrase_l:
+            continue
+        if len(phrase_l) > 3 and phrase_l in task.lower():
+            score += 3.0
+            evidence.append(f"trigger phrase matched: {phrase_l!r}")
+        elif _tokens(phrase_l) & task_tokens:
+            score += 0.6
+
+    overlap = task_tokens & _tokens(f"{record.name} {record.purpose}")
+    if overlap:
+        score += 0.8 * len(overlap)
+        evidence.append(f"purpose overlap: {sorted(overlap)[:4]}")
+
+    for shortcut in record.shortcuts:
+        if shortcut.lower() in task.lower():
+            score += 4.0
+            evidence.append(f"shortcut invoked: {shortcut}")
+
+    return score * record.confidence, evidence
 
 
-@dataclass
-class RoutingResult:
-    selected: Optional[SourceRecord]
-    considered: list[CandidateScore] = field(default_factory=list)
-    blocked: list[SourceRecord] = field(default_factory=list)
-    precedence_applied: bool = False
-    reranked: bool = False
-    rationale: str = "intent=read domain=general"
-    confident: bool = True
+def _stage2(task: str, record: SourceRecord) -> tuple[float, list[str]]:
+    """Read the candidate's SKILL.md in full and score against the real body."""
+    if record.source_type == "registry":
+        # No local body to read. Neither reward nor punish -- but never let a
+        # remote skill outrank a local one it has not actually out-argued.
+        return 0.0, ["remote skill; body not fetched, scored on index only"]
 
-    def report(self) -> str:
-        if not self.selected:
-            return "No skill matched with sufficient confidence."
-        return f"Selected: {self.selected.name} (confidence: 1.0)"
+    skill_md = Path(record.source_path) / "SKILL.md"
+    if not skill_md.exists():
+        return 0.0, ["body unreadable"]
+    try:
+        body = skill_md.read_text(errors="replace")
+    except OSError:
+        return 0.0, ["body unreadable"]
+
+    task_tokens = _tokens(task)
+    body_lower = body.lower()
+    name_tokens = _tokens(record.name.replace("-", " "))
+    evidence: list[str] = []
+    score = 0.0
+
+    hits = sorted(t for t in task_tokens if len(t) > 3 and _mentions(body_lower, t))
+    if hits:
+        score += 1.2 * len(hits)
+        evidence.append(f"body mentions {sorted(hits)[:5]}")
+
+    # Distinctive coverage breaks ties between skills that both mention the
+    # generic words: the skill matching *more* of the task wins.
+    score += 0.3 * len(task_tokens & name_tokens)
+
+    # A body that explicitly disclaims the task should lose, not win. One shared
+    # token is not a disclaimer -- skill-creator's "do not use /skill-test"
+    # shares only "skill" with a skill-authoring task and was being penalised
+    # for it. Require at least two overlapping tokens, none of which is just the
+    # skill's own name.
+    for negation in re.findall(r"(?:do not use|don't use|not for)[^.\n]{0,120}", body_lower):
+        overlap = (task_tokens & _tokens(negation)) - name_tokens
+        if len(overlap) >= 2:
+            score -= 5.0
+            evidence.append(f"body disclaims this task: {negation[:70]!r}")
+
+    return score, evidence
 
 
 def route(
     context: RunContext,
     task: str,
-    shortlist_size: int = 5,
+    shortlist_size: int = 4,
     min_score: float = 1.5,
-    policy: Optional[Policy] = None,
-    precedence: Optional[Sequence[Precedence]] = None,
-) -> RoutingResult:
+    policy: Policy | None = None,
+    precedence: list | None = None,
+) -> Routing:
+    """Select one pack for a task.
+
+    Candidates blocked by the trust gate are excluded *before* scoring, not
+    after: a skill Capsule may not load should never be able to win a route and
+    then be refused downstream, because that leaks the runner-up's slot.
+    """
+    intent, domain = classify(task)
     policy = policy or Policy()
-    task_lower = task.lower()
 
-    candidates: list[CandidateScore] = []
-    blocked: list[SourceRecord] = []
-
-    for record in context.records:
+    skills = list(context.of_type("skill"))
+    blocked: list[str] = []
+    for record in context.of_type("registry"):
         decision = policy.can_load(record)
-        if not decision.allowed:
-            blocked.append(record)
-            continue
+        if decision.allowed:
+            skills.append(record)
+        else:
+            blocked.append(f"{record.name} ({decision.reason})")
 
-        score = 0.0
-        if _mentions(task, record):
-            score += 10.0
-        for trigger in record.trigger_phrases:
-            if trigger.lower() in task_lower:
-                score += 2.5
-
+    candidates = []
+    for record in skills:
+        score, evidence = _stage1(task, record)
         if score > 0:
-            candidates.append(CandidateScore(record, score, "matched triggers", body_read=True))
+            candidates.append(Candidate(record=record, stage1_score=score, evidence=evidence))
 
-    candidates.sort(key=lambda c: c.score, reverse=True)
+    if not candidates:
+        note = "no candidate scored above zero on the condensed index; refusing to guess"
+        if blocked:
+            note += f"; {len(blocked)} registry candidate(s) excluded by the trust gate"
+        return Routing(task, intent, domain, None, note, confident=False, blocked=blocked)
 
-    precedence_applied = False
-    reranked = False
+    candidates.sort(key=lambda c: -c.stage1_score)
+    shortlist = candidates[:shortlist_size]
 
-    if precedence and len(candidates) >= 2:
-        for p in precedence:
-            if p.applies(task):
-                precedence_applied = True
-                p_idx = -1
-                o_idx = -1
-                for idx, c in enumerate(candidates):
-                    if c.record.name == p.prefer:
-                        p_idx = idx
-                    elif c.record.name == p.over:
-                        o_idx = idx
+    # Stage two: inspect shortlisted candidates in full, then rerank.
+    for candidate in shortlist:
+        bonus, evidence = _stage2(task, candidate.record)
+        candidate.stage2_score = candidate.stage1_score + bonus
+        candidate.evidence.extend(evidence)
+        candidate.body_read = True
 
-                if p_idx != -1 and o_idx != -1:
-                    candidates[p_idx].score += p.weight
-                    candidates.sort(key=lambda c: c.score, reverse=True)
-                    if candidates[0].record.name == p.prefer and p_idx > 0:
-                        reranked = True
+    # Declared precedence: a specialist beats a generalist it is competing with.
+    # Applied as a bounded nudge rather than an absolute override, so a clearly
+    # better generalist match still wins and the relationship stays advisory.
+    applied_precedence: list[str] = []
+    by_name = {c.record.name: c for c in shortlist}
+    for rule in (precedence or []):
+        if not rule.applies(task):
+            continue
+        winner, loser = by_name.get(rule.prefer), by_name.get(rule.over)
+        if winner and loser:
+            winner.stage2_score += getattr(rule, "weight", 2.0)
+            note = f"precedence: {rule.prefer} preferred over {rule.over}"
+            if rule.reason:
+                note += f" ({rule.reason})"
+            winner.evidence.append(note)
+            applied_precedence.append(note)
 
-    if not candidates or candidates[0].score < min_score:
-        return RoutingResult(selected=None, considered=candidates, blocked=blocked, confident=False)
+    pre_order = [c.record.name for c in shortlist]
+    shortlist.sort(key=lambda c: -c.stage2_score)
+    reranked = [c.record.name for c in shortlist] != pre_order
 
-    return RoutingResult(
-        selected=candidates[0].record,
-        considered=candidates,
-        blocked=blocked,
-        precedence_applied=precedence_applied,
-        reranked=reranked,
-        confident=True,
+    best = shortlist[0]
+    if best.score < min_score:
+        return Routing(
+            task, intent, domain, None,
+            f"best candidate {best.record.name} scored {best.score:.2f}, below threshold {min_score}; "
+            "low confidence, not proceeding",
+            considered=candidates, reranked=reranked, confident=False,
+        )
+
+    runner_up = shortlist[1] if len(shortlist) > 1 else None
+    margin = f" over {runner_up.record.name} ({runner_up.score:.2f})" if runner_up else ""
+    rationale = (
+        f"intent={intent}, domain={domain}; selected after reading "
+        f"{len(shortlist)} candidate bodies in full; score {best.score:.2f}{margin}. "
+        + ("; ".join(best.evidence[:2]) if best.evidence else "")
+    )
+
+    return Routing(
+        task, intent, domain, best.record, rationale,
+        considered=candidates, reranked=reranked, confident=True, blocked=blocked,
+        precedence_applied=applied_precedence,
     )

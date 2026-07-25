@@ -1,0 +1,12 @@
+{
+  "id": "vercel-labs/skills/find-skills",
+  "audits": [
+    {"provider": "Gen Agent Trust Hub", "status": "pass", "riskLevel": "LOW",
+     "summary": "No policy violations detected.", "auditedAt": "2026-06-14T00:00:00Z"},
+    {"provider": "Socket", "status": "pass",
+     "summary": "0 alerts.", "auditedAt": "2026-06-18T00:00:00Z"},
+    {"provider": "Snyk", "status": "warn", "riskLevel": "MEDIUM",
+     "summary": "Reads credential-shaped paths during discovery.",
+     "auditedAt": "2026-07-02T00:00:00Z"}
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "larksuite/skills/lark-approval",
+  "audits": [
+    {"provider": "Gen Agent Trust Hub", "status": "pending", "auditedAt": ""},
+    {"provider": "Socket", "status": "pending", "auditedAt": ""},
+    {"provider": "Snyk", "status": "pending", "auditedAt": ""}
+  ]
+}

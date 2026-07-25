@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from capsule.discover import discover, _trigger_phrases  # noqa: E402
+from capsule.discover import discover, parse_frontmatter, _trigger_phrases  # noqa: E402
 from capsule.policy import Policy, PolicyError  # noqa: E402
 
 
@@ -33,6 +33,7 @@ from capsule.schema_export import (  # noqa: E402
     skill_frontmatter_schema, evals_schema, run_context_schema, export_schemas,
 )
 from capsule.doctor import audit_skill, audit_context  # noqa: E402
+from capsule.cli import main as capsule_cli_main  # noqa: E402
 
 SKILL_ROOTS = ["/mnt/skills/public", "/mnt/skills/examples"]
 MOUNTS_PRESENT = all(Path(r).exists() for r in SKILL_ROOTS)
@@ -62,6 +63,100 @@ def test_run_context_round_trips_through_json():
     assert len(restored.records) == 1
     assert restored.records[0].name == "x"
     assert restored.records[0].confidence == 0.8
+
+
+def _write_cli_skill(root: Path, name: str = "demo-skill") -> Path:
+    skill_dir = root / name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: Local CLI fixture skill.\n---\n# {name}\n"
+    )
+    (skill_dir / "LICENSE.txt").write_text("Apache License\nwww.apache.org/licenses\n")
+    return skill_dir
+
+
+def test_cli_validate_accepts_pack_path(tmp_path, capsys):
+    skill_dir = _write_cli_skill(tmp_path)
+
+    rc = capsule_cli_main(["validate", str(skill_dir)])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "valid" in out
+
+
+def test_cli_reconstruct_and_package_from_index(tmp_path, capsys):
+    source = _write_cli_skill(tmp_path / "source")
+    index = tmp_path / "capsule-index.json"
+    dest = tmp_path / "packs"
+    config = tmp_path / "capsule.toml"
+
+    context = RunContext(
+        roots=[str(source.parent)],
+        records=[
+            SourceRecord(
+                "skill",
+                str(source),
+                "demo-skill",
+                "general",
+                "Local CLI fixture skill.",
+                license_class="apache-2.0",
+                reconstructable=True,
+            )
+        ],
+        built_at="test",
+    )
+    index.write_text(context.to_json())
+    config.write_text(f'[policy]\nwritable_roots = ["{dest}"]\nreadonly_roots = []\n')
+
+    rc = capsule_cli_main([
+        "reconstruct",
+        "--index",
+        str(index),
+        "--skill",
+        "demo-skill",
+        "--dest",
+        str(dest),
+        "--config",
+        str(config),
+        "--package",
+    ])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "demo-skill" in out
+    assert (dest / "demo-skill" / "SKILL.md").exists()
+    assert (dest / "demo-skill" / "PROVENANCE.md").exists()
+    assert (dest / "demo-skill.skill").exists()
+
+
+def test_cli_audit_runs_against_index(tmp_path, capsys):
+    source = _write_cli_skill(tmp_path / "source")
+    index = tmp_path / "capsule-index.json"
+    context = RunContext(
+        roots=[str(source.parent)],
+        records=[
+            SourceRecord(
+                "skill",
+                str(source),
+                "demo-skill",
+                "general",
+                "Local CLI fixture skill.",
+                trigger_phrases=["demo"],
+                license_class="apache-2.0",
+                reconstructable=True,
+            )
+        ],
+        built_at="test",
+    )
+    index.write_text(context.to_json())
+
+    rc = capsule_cli_main(["audit", "--index", str(index)])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "trigger overlap" in out
+    assert "lethal trifecta" in out
 
 
 # -- policy -------------------------------------------------------------------
@@ -791,8 +886,8 @@ def test_precedence_does_not_fire_outside_its_trigger():
 # =============================================================================
 
 from capsule.health import (  # noqa: E402
-    analyze, classifier_domain_risk, conflicting_directives, example_density,
-    progressive_disclosure, reasoning_extraction_risk, summarize,
+    analyze, classifier_domain_risk, conflicting_directives, description_quality,
+    example_density, progressive_disclosure, reasoning_extraction_risk, summarize,
 )
 
 
@@ -923,7 +1018,7 @@ def test_behavioral_prescription_still_reads_as_brittle():
 
 def test_capsule_own_pack_is_well_calibrated():
     """Self-application: Capsule's own SKILL.md must pass its own check."""
-    body = Path(__file__).resolve().parents[0].joinpath("SKILL.md").read_text()
+    body = Path(__file__).resolve().parents[1].joinpath("SKILL.md").read_text()
     report = analyze(_skill(name="capsule"), body, aux_files=6)
     assert report.policy_directives > report.behavioral_directives
     assert report.altitude in ("right", "firm")
@@ -1697,6 +1792,25 @@ def test_validate_references_underscore_not_orphaned(tmp_path):
     assert not any("_internal" in p for p in problems)
 
 
+def test_validate_references_ignores_links_inside_code_fences(tmp_path):
+    """Regression: a doc teaching skill authoring failed its own validator.
+
+    An authoring guide shows `[FORMS.md](references/FORMS.md)` inside a fenced
+    block as an example. Resolving that against the guide's own directory
+    reports a broken link that was never a link.
+    """
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\ndescription: Teaches authoring. Use when asked.\n---\n"
+        "Here is an example of how to reference a file:\n\n"
+        "````markdown\n"
+        "See [FORMS.md](references/FORMS.md) for the form guide.\n"
+        "````\n"
+    )
+    assert validate_references(skill_dir) == []
+
+
 def test_validate_pack_includes_reference_problems(tmp_path):
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
@@ -1800,6 +1914,101 @@ def test_validate_pack_accepts_lifecycle_frontmatter(tmp_path):
     assert ok, f"unexpected problems: {problems}"
 
 
+# -- host frontmatter extensions ----------------------------------------------
+
+def test_host_extension_keys_do_not_fail_a_pack(tmp_path):
+    """Regression: capsule rejected first-party skills as invalid.
+
+    `version` appears in 13 of the 28 skills shipped in the official plugin
+    marketplace. Hosts ignore keys they do not implement, so rejecting them
+    fails packs that are valid everywhere they actually run.
+    """
+    pack = tmp_path / "my-skill"
+    pack.mkdir()
+    (pack / "SKILL.md").write_text(
+        "---\nname: my-skill\ndescription: Does a thing. Use when asked.\n"
+        "version: 0.1.0\nuser-invocable: false\nargument-hint: '[file]'\n---\nBody.\n"
+    )
+    ok, problems = validate_pack(pack)
+    assert ok, f"unexpected problems: {problems}"
+
+
+def test_genuinely_unknown_keys_still_fail(tmp_path):
+    pack = tmp_path / "my-skill"
+    pack.mkdir()
+    (pack / "SKILL.md").write_text(
+        "---\nname: my-skill\ndescription: A demo.\nnonsense: yes\n---\nBody.\n"
+    )
+    ok, problems = validate_pack(pack)
+    assert not ok
+    assert any("nonsense" in p for p in problems)
+
+
+# -- description quality ------------------------------------------------------
+
+def test_description_missing_is_high_severity():
+    findings = description_quality("")
+    assert findings and findings[0].severity == "high"
+
+
+def test_first_person_description_is_flagged():
+    findings = description_quality(
+        "I can help you process Excel files. Use when the user mentions .xlsx."
+    )
+    assert any(f.check == "description-person" for f in findings)
+
+
+def test_third_person_description_passes_the_person_check():
+    findings = description_quality(
+        "Processes Excel files and generates reports. Use when the user "
+        "mentions spreadsheets or .xlsx files."
+    )
+    assert not any(f.check == "description-person" for f in findings)
+
+
+def test_description_without_a_trigger_clause_is_flagged():
+    """Under-triggering is the common failure, so 'when' has to be present."""
+    findings = description_quality("Extracts text and tables from PDF files.")
+    assert any(f.check == "description-no-trigger" for f in findings)
+
+
+def test_whenever_phrasing_counts_as_a_trigger_clause():
+    """Regression: 'Use whenever...' was flagged as having no trigger clause.
+
+    Caught by running the check over the installed marketplace corpus. A check
+    that flags a correctly-written description teaches authors to ignore it.
+    """
+    findings = description_quality(
+        "End-to-end onboarding for a freshly-plugged-in M5Stack ESP32 device. "
+        "Use whenever the user plugs in or wants to flash an ESP32 board."
+    )
+    assert not any(f.check == "description-no-trigger" for f in findings)
+
+
+def test_third_person_should_be_used_phrasing_counts():
+    findings = description_quality(
+        "This skill should be used when the user wants to create a skill."
+    )
+    assert not any(f.check == "description-no-trigger" for f in findings)
+
+
+def test_good_description_yields_no_findings():
+    findings = description_quality(
+        "Extracts text and tables from PDF files, fills forms, merges "
+        "documents. Use when working with PDF files or when the user mentions "
+        "PDFs, forms, or document extraction."
+    )
+    assert findings == []
+
+
+def test_capsule_own_description_is_well_formed():
+    """Self-application: Capsule's own description must pass its own check."""
+    body = Path(__file__).resolve().parents[1].joinpath("SKILL.md").read_text()
+    front = parse_frontmatter(body)
+    findings = description_quality(str(front.get("description") or ""))
+    assert not [f for f in findings if f.severity in ("high", "medium")], findings
+
+
 # -- color & formatting -------------------------------------------------------
 
 def test_color_functions_return_strings():
@@ -1890,9 +2099,8 @@ def test_hook_script_contains_prompt_injection_signatures():
 
 
 def test_pre_commit_hooks_file_exists():
-    hooks_file = Path(__file__).resolve().parents[0] / ".pre-commit-hooks.yaml"
+    hooks_file = Path(__file__).resolve().parents[1] / ".pre-commit-hooks.yaml"
     assert hooks_file.exists()
     content = hooks_file.read_text()
     assert "capsule-validate" in content
     assert "capsule-doctor" in content
-

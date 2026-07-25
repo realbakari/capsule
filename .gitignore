@@ -3,7 +3,7 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .DS_Store
-capsule-index.json
+/capsule-index.json
 packs/
 schemas/
 tmp_plugins/

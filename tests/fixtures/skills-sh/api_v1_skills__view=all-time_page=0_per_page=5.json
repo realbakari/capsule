@@ -1,0 +1,62 @@
+{
+  "view": "all-time",
+  "page": 0,
+  "perPage": 5,
+  "data": [
+    {
+      "id": "vercel-labs/skills/find-skills",
+      "source": "vercel-labs/skills",
+      "slug": "find-skills",
+      "name": "Find Skills",
+      "installs": 2600000,
+      "isDuplicate": false,
+      "hash": "b41d0f9c2a7e5188",
+      "url": "https://skills.sh/vercel-labs/skills/find-skills",
+      "installUrl": "vercel-labs/skills/find-skills"
+    },
+    {
+      "id": "anthropics/skills/frontend-design",
+      "source": "anthropics/skills",
+      "slug": "frontend-design",
+      "name": "Frontend Design",
+      "installs": 682100,
+      "isDuplicate": false,
+      "hash": "464641c145035748",
+      "url": "https://skills.sh/anthropics/skills/frontend-design",
+      "installUrl": "anthropics/skills/frontend-design"
+    },
+    {
+      "id": "microsoft/azure-skills/azure-validate",
+      "source": "microsoft/azure-skills",
+      "slug": "azure-validate",
+      "name": "Azure Validate",
+      "installs": 465200,
+      "isDuplicate": false,
+      "hash": "9c2f77a10bb4de35",
+      "url": "https://skills.sh/microsoft/azure-skills/azure-validate",
+      "installUrl": "microsoft/azure-skills/azure-validate"
+    },
+    {
+      "id": "larksuite/skills/lark-approval",
+      "source": "larksuite/skills",
+      "slug": "lark-approval",
+      "name": "Lark Approval",
+      "installs": 435000,
+      "isDuplicate": false,
+      "hash": "1de9004cb7735a62",
+      "url": "https://skills.sh/larksuite/skills/lark-approval",
+      "installUrl": "larksuite/skills/lark-approval"
+    },
+    {
+      "id": "acme-forks/skills/find-skills-mirror",
+      "source": "acme-forks/skills",
+      "slug": "find-skills-mirror",
+      "name": "Find Skills (mirror)",
+      "installs": 51200,
+      "isDuplicate": true,
+      "hash": "b41d0f9c2a7e5188",
+      "url": "https://skills.sh/acme-forks/skills/find-skills-mirror",
+      "installUrl": "acme-forks/skills/find-skills-mirror"
+    }
+  ]
+}

@@ -1,0 +1,1326 @@
+{
+  "capsule_version": "0.1.0",
+  "built_at": "2026-07-25T04:36:02+00:00",
+  "roots": [
+    "/mnt/skills/public",
+    "/mnt/skills/examples",
+    "/mnt/user-data/uploads"
+  ],
+  "record_count": 36,
+  "records": [
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/docx",
+      "name": "docx",
+      "category": "document-io",
+      "purpose": "A `.docx` is a ZIP archive of XML files. Choose your approach by task:",
+      "trigger_phrases": [
+        "docx",
+        "word doc",
+        "word document",
+        ".docx",
+        ".dotx",
+        "report",
+        "memo",
+        "letter",
+        "template",
+        "any mention of 'word doc'",
+        "'word document'",
+        "extracting"
+      ],
+      "shortcuts": [
+        "/out",
+        "scripts/office/soffice.py",
+        "scripts/merge_runs.py",
+        "scripts/office/validate.py",
+        "scripts/accept_changes.py",
+        "scripts/comment.py"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:proprietary-restricted",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "proprietary-restricted",
+      "reconstructable": false,
+      "body_words": 975,
+      "aux_dirs": [
+        "scripts"
+      ],
+      "content_hash": "8017469ea95fb7d2",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/file-reading",
+      "name": "file-reading",
+      "category": "document-io",
+      "purpose": "When a user uploads a file in claude.ai, Claude Desktop, or Cowork,",
+      "trigger_phrases": [
+        "file-reading",
+        "file reading",
+        "each file type (pdf",
+        "docx",
+        "xlsx",
+        "csv",
+        "json",
+        "images",
+        "archives"
+      ],
+      "shortcuts": [
+        "/mnt"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:proprietary-restricted",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "proprietary-restricted",
+      "reconstructable": false,
+      "body_words": 1901,
+      "aux_dirs": [],
+      "content_hash": "01ccda8f3014a319",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/frontend-design",
+      "name": "frontend-design",
+      "category": "visual-design",
+      "purpose": "Approach this as the design lead at a small studio known for giving every client a visual identity that could not be mistaken for anyone else's. This client has already rejected proposals that felt templated, and is paying for a distinctive point of view: make deliberate, opinion",
+      "trigger_phrases": [
+        "frontend-design",
+        "frontend design"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 1356,
+      "aux_dirs": [],
+      "content_hash": "464641c145035748",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/pdf",
+      "name": "pdf",
+      "category": "document-io",
+      "purpose": "This guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see REFERENCE.md. If you need to fill out a PDF form, read FORMS.md and follow its instructions.",
+      "trigger_phrases": [
+        "pdf",
+        ".pdf"
+      ],
+      "shortcuts": [
+        "/sub",
+        "/super"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:proprietary-restricted",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "proprietary-restricted",
+      "reconstructable": false,
+      "body_words": 1007,
+      "aux_dirs": [
+        "FORMS.md",
+        "REFERENCE.md",
+        "scripts"
+      ],
+      "content_hash": "9f78b8359fbd4943",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/pdf-reading",
+      "name": "pdf-reading",
+      "category": "document-io",
+      "purpose": "This guide covers essential PDF reading operations using Python libraries and command-line tools. For advanced features (pypdfium2 rendering, pdfplumber table settings, OCR fallback, encrypted/corrupted PDF handling), see REFERENCE.md.",
+      "trigger_phrases": [
+        "pdf-reading",
+        "pdf reading",
+        "you need to read",
+        "inspect",
+        "pdf creation",
+        "form filling",
+        "merging",
+        "splitting",
+        "watermarking",
+        "encryption \u2014 use the pdf skill instead"
+      ],
+      "shortcuts": [
+        "/tmp"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:proprietary-restricted",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "proprietary-restricted",
+      "reconstructable": false,
+      "body_words": 1617,
+      "aux_dirs": [
+        "REFERENCE.md"
+      ],
+      "content_hash": "e2081f071b4f56fb",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/pptx",
+      "name": "pptx",
+      "category": "document-io",
+      "purpose": "A `.pptx` is a ZIP archive of XML files. Choose your approach by task:",
+      "trigger_phrases": [
+        "pptx",
+        "deck,",
+        "slides,",
+        "presentation,",
+        ".pptx",
+        ".potx"
+      ],
+      "shortcuts": [
+        "/options",
+        "/out",
+        "/slide",
+        "scripts/thumbnail.py",
+        "scripts/office/validate.py",
+        "scripts/add_slide.py",
+        "scripts/clean.py",
+        "scripts/office/soffice.py"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:proprietary-restricted",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "proprietary-restricted",
+      "reconstructable": false,
+      "body_words": 3129,
+      "aux_dirs": [
+        "scripts"
+      ],
+      "content_hash": "a7ff03e2c85b636f",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/product-self-knowledge",
+      "name": "product-self-knowledge",
+      "category": "skill-infrastructure",
+      "purpose": "1. **Accuracy over guessing** - Check official docs when uncertain",
+      "trigger_phrases": [
+        "product-self-knowledge",
+        "product self knowledge",
+        ".js",
+        ".ai"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:unknown",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 0.9,
+      "license_class": "unknown",
+      "reconstructable": false,
+      "body_words": 311,
+      "aux_dirs": [],
+      "content_hash": "216f66560c9f1088",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/public/xlsx",
+      "name": "xlsx",
+      "category": "document-io",
+      "purpose": "openpyxl writes formulas as strings with **no cached values**. Until you recalculate, every",
+      "trigger_phrases": [
+        "xlsx",
+        "the xlsx in my downloads",
+        ".xlsx",
+        ".xlsm",
+        ".xltx",
+        ".csv",
+        ".tsv"
+      ],
+      "shortcuts": [
+        "scripts/recalc.py"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:proprietary-restricted",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "proprietary-restricted",
+      "reconstructable": false,
+      "body_words": 1312,
+      "aux_dirs": [
+        "scripts"
+      ],
+      "content_hash": "6712b39718fe8150",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/algorithmic-art",
+      "name": "algorithmic-art",
+      "category": "visual-design",
+      "purpose": "Algorithmic philosophies are computational aesthetic movements that are then expressed through code. Output .md files (philosophy), .html files (interactive viewer), and .js files (generative algorithms).",
+      "trigger_phrases": [
+        "algorithmic-art",
+        "algorithmic art",
+        ".js"
+      ],
+      "shortcuts": [
+        "/script",
+        "/style",
+        "/head",
+        "/div",
+        "/body",
+        "/html",
+        "/label",
+        "/span"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 2761,
+      "aux_dirs": [
+        "templates"
+      ],
+      "content_hash": "3bc4092c09804853",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/benepass-reimbursement",
+      "name": "benepass-reimbursement",
+      "category": "admin-tasks",
+      "purpose": "Automate the complete Benepass reimbursement flow \u2014 from login through submission \u2014 using browser automation, Gmail integration for verification codes, and file upload for receipts.",
+      "trigger_phrases": [
+        "benepass-reimbursement",
+        "benepass reimbursement",
+        ".com"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 950,
+      "aux_dirs": [],
+      "content_hash": "8bb4ac08bb9969e4",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/brand-guidelines",
+      "name": "brand-guidelines",
+      "category": "visual-design",
+      "purpose": "To access Anthropic's official brand identity and style resources, use this skill.",
+      "trigger_phrases": [
+        "brand-guidelines",
+        "brand guidelines"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 329,
+      "aux_dirs": [],
+      "content_hash": "1120b3769e2985ce",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/call-to-book",
+      "name": "call-to-book",
+      "category": "admin-tasks",
+      "purpose": "You're helping me book something by phone \u2014 an appointment, a reservation, a service slot. Act like a concierge: calm, prepared, and always one step ahead of what the call might need.",
+      "trigger_phrases": [
+        "call-to-book",
+        "call to book"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 744,
+      "aux_dirs": [],
+      "content_hash": "6caa80913d6bdea2",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/cancel-unsubscribe",
+      "name": "cancel-unsubscribe",
+      "category": "commerce",
+      "purpose": "You're helping me cancel a subscription or unsubscribe from a service. Act like a concierge \u2014 calm, determined, and always looking for the fastest path to done.",
+      "trigger_phrases": [
+        "cancel-unsubscribe",
+        "cancel unsubscribe"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 941,
+      "aux_dirs": [],
+      "content_hash": "b2cb790a01d02ddc",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/canvas-design",
+      "name": "canvas-design",
+      "category": "document-io",
+      "purpose": "These are instructions for creating design philosophies - aesthetic movements that are then EXPRESSED VISUALLY. Output only .md files, .pdf files, and .png files.",
+      "trigger_phrases": [
+        "canvas-design",
+        "canvas design",
+        ".png",
+        ".pdf",
+        "the user asks to create a poster",
+        "piece of art",
+        "design",
+        "other static piece"
+      ],
+      "shortcuts": [
+        "/canvas-fonts"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 1749,
+      "aux_dirs": [
+        "canvas-fonts"
+      ],
+      "content_hash": "a1f288079624402f",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/doc-coauthoring",
+      "name": "doc-coauthoring",
+      "category": "writing",
+      "purpose": "This skill provides a structured workflow for guiding users through collaborative document creation. Act as an active guide, walking users through three stages: Context Gathering, Refinement & Structure, and Reader Testing.",
+      "trigger_phrases": [
+        "doc-coauthoring",
+        "doc coauthoring",
+        "user wants to write documentation",
+        "proposals",
+        "technical specs",
+        "decision docs",
+        "similar structured content"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:unknown",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 0.9,
+      "license_class": "unknown",
+      "reconstructable": false,
+      "body_words": 2466,
+      "aux_dirs": [],
+      "content_hash": "2e47d78846faeea4",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/event-planning",
+      "name": "event-planning",
+      "category": "general",
+      "purpose": "You're helping me plan an event. Act like a concierge \u2014 creative, organized, and always thinking two steps ahead. Scale your involvement to the size of the event \u2014 a birthday dinner gets a light touch, a wedding gets a full production plan.",
+      "trigger_phrases": [
+        "event-planning",
+        "event planning"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 719,
+      "aux_dirs": [],
+      "content_hash": "2219d71d1b058d53",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/file-expenses",
+      "name": "file-expenses",
+      "category": "admin-tasks",
+      "purpose": "You're helping me submit an expense or reimbursement. Act like a concierge \u2014 proactive, visual, and always one step ahead.",
+      "trigger_phrases": [
+        "file-expenses",
+        "file expenses"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 517,
+      "aux_dirs": [],
+      "content_hash": "433ff85e9487084d",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/file-form",
+      "name": "file-form",
+      "category": "admin-tasks",
+      "purpose": "You're helping me deal with a piece of bureaucracy. Act like a concierge \u2014 patient, thorough, and always making this feel less painful than it actually is.",
+      "trigger_phrases": [
+        "file-form",
+        "file form"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 534,
+      "aux_dirs": [],
+      "content_hash": "b1721d9d64cdb88a",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/financial-calculator",
+      "name": "financial-calculator",
+      "category": "analysis",
+      "purpose": "You're helping me think through a financial question with real numbers. Act like a sharp, friendly financial advisor \u2014 clear, thorough, and always showing your work.",
+      "trigger_phrases": [
+        "financial-calculator",
+        "financial calculator"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 663,
+      "aux_dirs": [],
+      "content_hash": "f84d10c66cc58ae7",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/grocery-shopping",
+      "name": "grocery-shopping",
+      "category": "visual-design",
+      "purpose": "You're helping me order groceries for delivery. Act like a concierge \u2014 warm, natural, and one step at a time.",
+      "trigger_phrases": [
+        "grocery-shopping",
+        "grocery shopping"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 457,
+      "aux_dirs": [],
+      "content_hash": "170a576c36079a98",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/hire-help",
+      "name": "hire-help",
+      "category": "admin-tasks",
+      "purpose": "You're helping me find and hire someone for a task. Act like a concierge \u2014 resourceful, practical, and focused on getting the right person booked.",
+      "trigger_phrases": [
+        "hire-help",
+        "hire help"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 575,
+      "aux_dirs": [],
+      "content_hash": "84c9809f6cc72a31",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/internal-comms",
+      "name": "internal-comms",
+      "category": "skill-infrastructure",
+      "purpose": "To write internal communications, use this skill for:",
+      "trigger_phrases": [
+        "internal-comms",
+        "internal comms"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 211,
+      "aux_dirs": [
+        "examples"
+      ],
+      "content_hash": "067b7587a344a928",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/learn",
+      "name": "learn",
+      "category": "skill-infrastructure",
+      "purpose": "The goal is not to answer the learner's question but to help them be able to answer it themselves \u2014 this time and next time. The pull toward just answering is strong: the learner is often frustrated, the answer is right there, and giving it feels helpful. But a tutor who hands ov",
+      "trigger_phrases": [
+        "learn",
+        "m rusty on",
+        "what is x",
+        "help me understand this",
+        "galois theory,",
+        "transformers, from scratch",
+        "won",
+        "keep mixing these up,",
+        "not getting it",
+        "s evaluative verdict: opinion prompts (",
+        "settle this",
+        "honest take"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 2227,
+      "aux_dirs": [],
+      "content_hash": "dd79b135afec2994",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/mcp-builder",
+      "name": "mcp-builder",
+      "category": "skill-infrastructure",
+      "purpose": "Create MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. The quality of an MCP server is measured by how well it enables LLMs to accomplish real-world tasks.",
+      "trigger_phrases": [
+        "mcp-builder",
+        "mcp builder",
+        "building mcp servers to integrate external apis",
+        "services",
+        "whether in python (fastmcp)",
+        "node/typescript (mcp sdk)"
+      ],
+      "shortcuts": [
+        "/reference",
+        "/question",
+        "/answer",
+        "/evaluation"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 1143,
+      "aux_dirs": [
+        "reference",
+        "scripts"
+      ],
+      "content_hash": "0f4592dcb53cf2b5",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "manifest",
+      "source_path": "/mnt/skills/examples/mcp-builder/scripts/requirements.txt",
+      "name": "requirements.txt",
+      "category": "build-config",
+      "purpose": "anthropic>=0.39.0",
+      "trigger_phrases": [
+        "requirements"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "informational"
+      ],
+      "reload_rules": "on-repo-change",
+      "confidence": 0.7,
+      "license_class": "unknown",
+      "reconstructable": false,
+      "body_words": 2,
+      "aux_dirs": [],
+      "content_hash": "d5d7558b2368ecea",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/meal-delivery",
+      "name": "meal-delivery",
+      "category": "visual-design",
+      "purpose": "You're helping me order food timed to arrive at a specific time. Act like a concierge \u2014 warm, efficient, and always thinking about the clock.",
+      "trigger_phrases": [
+        "meal-delivery",
+        "meal delivery"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 453,
+      "aux_dirs": [],
+      "content_hash": "93aab7102cddd757",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/morning",
+      "name": "morning",
+      "category": "visual-design",
+      "purpose": "This page is my 30-second morning glance: one calm view of the shape of my day and the few things worth knowing, so I start oriented instead of overwhelmed.",
+      "trigger_phrases": [
+        "morning"
+      ],
+      "shortcuts": [
+        "/morning",
+        "/mnt",
+        "/opt"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:unknown",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 0.9,
+      "license_class": "unknown",
+      "reconstructable": false,
+      "body_words": 2389,
+      "aux_dirs": [
+        "assets"
+      ],
+      "content_hash": "f4c03443f4b3f3a7",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/paint",
+      "name": "paint",
+      "category": "visual-design",
+      "purpose": "You paint by writing a short Python function against `paintkit.Canvas`, an",
+      "trigger_phrases": [
+        "paint",
+        "the user asks you to draw",
+        "sketch",
+        "make a picture of something",
+        "there is no image-generation tool available",
+        "charts",
+        "diagrams",
+        "ui mockups",
+        "requests to edit an existing photograph"
+      ],
+      "shortcuts": [
+        "/mnt",
+        "/mnt/skills/examples/paint/render.py"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 494,
+      "aux_dirs": [
+        "examples",
+        "paintkit",
+        "reference.md",
+        "render.py"
+      ],
+      "content_hash": "ebdf18262b1dd326",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/prescription-refill",
+      "name": "prescription-refill",
+      "category": "admin-tasks",
+      "purpose": "You're helping me refill a prescription. Act like a concierge \u2014 calm, thorough, and one step ahead of what the pharmacy will ask for.",
+      "trigger_phrases": [
+        "prescription-refill",
+        "prescription refill",
+        "m running low."
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 1084,
+      "aux_dirs": [],
+      "content_hash": "aab9c7a86b6128dd",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/return-refund",
+      "name": "return-refund",
+      "category": "commerce",
+      "purpose": "You're helping me return an item or get a refund. Act like a concierge \u2014 efficient, advocate-minded, and always looking for the easiest path.",
+      "trigger_phrases": [
+        "return-refund",
+        "return refund"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 573,
+      "aux_dirs": [],
+      "content_hash": "2d19f133875cf5fa",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/setup-writing-style",
+      "name": "setup-writing-style",
+      "category": "skill-infrastructure",
+      "purpose": "This skill helps a user sound like the best version of themselves in writing. It is built on one thesis: people don't want a transcript of how they write \u2014 they want to sound like themselves, improved. The craft is improving the writing while keeping it unmistakably theirs.",
+      "trigger_phrases": [
+        "setup-writing-style",
+        "setup writing style",
+        "the user asks to set up",
+        "learn",
+        "capture their writing voice",
+        "complains that drafts sound generic",
+        "unlike them an"
+      ],
+      "shortcuts": [
+        "/tmp",
+        "/skills",
+        "stylometry.py"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:unknown",
+        "source-tree:read-only",
+        "reconstruction:denied-by-default"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 0.9,
+      "license_class": "unknown",
+      "reconstructable": false,
+      "body_words": 7024,
+      "aux_dirs": [
+        "scripts"
+      ],
+      "content_hash": "bf230573de994546",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/skill-creator",
+      "name": "skill-creator",
+      "category": "skill-infrastructure",
+      "purpose": "A skill for creating new skills and iteratively improving them.",
+      "trigger_phrases": [
+        "skill-creator",
+        "skill creator",
+        "users want to create a skill from scratch",
+        "edit",
+        "optimize an existing skill",
+        "run evals to test a skill",
+        "benchmark ski"
+      ],
+      "shortcuts": [
+        "/skill-test",
+        "/iteration",
+        "/eval",
+        "/skill-snapshot",
+        "/iteration-",
+        "/eval-viewer",
+        "/dev",
+        "/tmp"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 5234,
+      "aux_dirs": [
+        "agents",
+        "assets",
+        "eval-viewer",
+        "references",
+        "scripts"
+      ],
+      "content_hash": "42765c880e446a83",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/slack-gif-creator",
+      "name": "slack-gif-creator",
+      "category": "visual-design",
+      "purpose": "A toolkit providing utilities and knowledge for creating animated GIFs optimized for Slack.",
+      "trigger_phrases": [
+        "slack-gif-creator",
+        "slack gif creator",
+        "make me a gif of x doing y for slack."
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 1103,
+      "aux_dirs": [
+        "core",
+        "requirements.txt"
+      ],
+      "content_hash": "2efca615ce55a3ed",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "manifest",
+      "source_path": "/mnt/skills/examples/slack-gif-creator/requirements.txt",
+      "name": "requirements.txt",
+      "category": "build-config",
+      "purpose": "pillow>=10.0.0",
+      "trigger_phrases": [
+        "requirements"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "informational"
+      ],
+      "reload_rules": "on-repo-change",
+      "confidence": 0.7,
+      "license_class": "unknown",
+      "reconstructable": false,
+      "body_words": 4,
+      "aux_dirs": [],
+      "content_hash": "edc7108a0c6b5618",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/theme-factory",
+      "name": "theme-factory",
+      "category": "document-io",
+      "purpose": "This skill provides a curated collection of professional font and color themes themes, each with carefully selected color palettes and font pairings. Once a theme is chosen, it can be applied to any artifact.",
+      "trigger_phrases": [
+        "theme-factory",
+        "theme factory"
+      ],
+      "shortcuts": [],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 486,
+      "aux_dirs": [
+        "theme-showcase.pdf",
+        "themes"
+      ],
+      "content_hash": "c35893e221e28895",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    },
+    {
+      "source_type": "skill",
+      "source_path": "/mnt/skills/examples/web-artifacts-builder",
+      "name": "web-artifacts-builder",
+      "category": "visual-design",
+      "purpose": "To build powerful frontend claude.ai artifacts, follow these steps:",
+      "trigger_phrases": [
+        "web-artifacts-builder",
+        "web artifacts builder",
+        ".ai",
+        "complex artifacts requiring state management",
+        "routing"
+      ],
+      "shortcuts": [
+        "scripts/init-artifact.sh",
+        "scripts/bundle-artifact.sh"
+      ],
+      "scope": "external-trusted",
+      "policy_constraints": [
+        "license:apache-2.0",
+        "source-tree:read-only"
+      ],
+      "reload_rules": "on-selection: read SKILL.md in full before use",
+      "confidence": 1.0,
+      "license_class": "apache-2.0",
+      "reconstructable": true,
+      "body_words": 446,
+      "aux_dirs": [
+        "scripts"
+      ],
+      "content_hash": "81c5002c6643b0de",
+      "registry_id": "",
+      "installs": 0,
+      "is_duplicate": false,
+      "trust_verdict": "",
+      "trust_status": "",
+      "trust_risk": "",
+      "trust_reason": ""
+    }
+  ]
+}

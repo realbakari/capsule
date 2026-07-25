@@ -1,0 +1,12 @@
+{
+  "id": "microsoft/azure-skills/azure-validate",
+  "audits": [
+    {"provider": "Gen Agent Trust Hub", "status": "pass", "riskLevel": "LOW",
+     "summary": "Rated Safe.", "auditedAt": "2026-06-14T00:00:00Z"},
+    {"provider": "Socket", "status": "pass",
+     "summary": "0 alerts.", "auditedAt": "2026-06-18T00:00:00Z"},
+    {"provider": "Snyk", "status": "fail", "riskLevel": "CRITICAL",
+     "summary": "Fetches remote content and pipes it to a shell.",
+     "auditedAt": "2026-07-02T00:00:00Z"}
+  ]
+}

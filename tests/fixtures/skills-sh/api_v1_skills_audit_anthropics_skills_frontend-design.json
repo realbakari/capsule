@@ -1,0 +1,11 @@
+{
+  "id": "anthropics/skills/frontend-design",
+  "audits": [
+    {"provider": "Gen Agent Trust Hub", "status": "pass", "riskLevel": "LOW",
+     "summary": "No findings.", "auditedAt": "2026-06-14T00:00:00Z"},
+    {"provider": "Socket", "status": "pass",
+     "summary": "0 alerts.", "auditedAt": "2026-06-18T00:00:00Z"},
+    {"provider": "Snyk", "status": "pass", "riskLevel": "LOW",
+     "summary": "No findings.", "auditedAt": "2026-07-02T00:00:00Z"}
+  ]
+}

@@ -1,10 +1,52 @@
-"""Capsule trust aggregation module."""
+"""Trust: aggregate multi-provider security audits into one verdict.
+
+Grounded in what the skills.sh audit table actually shows, not in what a clean
+model would predict:
+
+  - `find-skills` is the single most-installed skill in the ecosystem (2.6M) and
+    carries a Snyk *Medium* risk. Popularity is not safety.
+  - `azure-validate` is rated Safe by Gen and 0-alerts by Socket while Snyk rates
+    it **Critical**. Providers disagree, and the disagreement is not noise.
+  - `azure-resource-visualizer` is High risk and comes from Microsoft, a curated
+    first-party source. Source reputation is not safety either.
+  - Two dozen `lark-*` skills are Pending on all three providers. Pending is not
+    a pass.
+
+So aggregation takes the **worst** verdict any provider reports. Averaging or
+majority-voting would have cleared azure-validate on a 2-1 vote, which is
+exactly the failure this module exists to prevent.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Sequence
 
+# Normalized statuses used by the registry.
+STATUS_PASS = "pass"
+STATUS_WARN = "warn"
+STATUS_FAIL = "fail"
+STATUS_PENDING = "pending"
+STATUS_UNKNOWN = "unknown"
+
+# Severity ladder. Higher wins when providers disagree.
+_STATUS_RANK = {
+    STATUS_PASS: 0,
+    STATUS_UNKNOWN: 1,
+    STATUS_PENDING: 1,
+    STATUS_WARN: 2,
+    STATUS_FAIL: 3,
+}
+
+_RISK_RANK = {
+    "NONE": 0,
+    "LOW": 1,
+    "MEDIUM": 2,
+    "MED": 2,
+    "HIGH": 3,
+    "CRITICAL": 4,
+}
+
+# Verdict -> what Capsule is allowed to do with the skill.
 VERDICT_ALLOW = "allow"
 VERDICT_APPROVAL = "approval-required"
 VERDICT_DENY = "deny"
@@ -13,66 +55,79 @@ VERDICT_DENY = "deny"
 @dataclass
 class ProviderAudit:
     provider: str
-    status: str = "pass"       # pass | fail | warn | pending
-    severity: str = "LOW"      # CRITICAL | HIGH | MEDIUM | LOW | ""
-    details: str = ""
+    status: str = STATUS_UNKNOWN
+    risk_level: str = ""
+    summary: str = ""
+    audited_at: str = ""
 
-    def __init__(self, provider: str, status: str = "pass", severity: str = "LOW", details: str = ""):
-        self.provider = provider
-        self.status = status
-        self.severity = severity
-        self.details = details
+    @classmethod
+    def from_api(cls, data: dict) -> "ProviderAudit":
+        return cls(
+            provider=str(data.get("provider", "unknown")),
+            status=str(data.get("status", STATUS_UNKNOWN)).lower(),
+            risk_level=str(data.get("riskLevel", "") or "").upper(),
+            summary=str(data.get("summary", "")),
+            audited_at=str(data.get("auditedAt", "")),
+        )
+
+    def rank(self) -> tuple[int, int]:
+        return (_STATUS_RANK.get(self.status, 1), _RISK_RANK.get(self.risk_level, 0))
 
 
 @dataclass
 class TrustVerdict:
     verdict: str
-    reasons: list[str] = field(default_factory=list)
+    status: str
+    risk_level: str
+    reason: str
+    providers: list[str] = field(default_factory=list)
     dissenting: bool = False
 
-    @property
-    def reason(self) -> str:
-        return "; ".join(self.reasons)
-
-    @property
-    def allowed(self) -> bool:
-        return self.verdict == VERDICT_ALLOW
+    def line(self) -> str:
+        flag = " [providers disagree]" if self.dissenting else ""
+        return f"{self.verdict} (status={self.status}, risk={self.risk_level or 'n/a'}){flag}: {self.reason}"
 
 
-def aggregate(audits: Sequence[ProviderAudit | dict[str, Any]]) -> TrustVerdict:
+def aggregate(audits: list[ProviderAudit]) -> TrustVerdict:
+    """Collapse provider audits to a single verdict, worst-case wins."""
     if not audits:
-        return TrustVerdict(verdict=VERDICT_DENY, reasons=["unknown is not safe — no audits available"])
+        return TrustVerdict(
+            VERDICT_DENY, STATUS_UNKNOWN, "",
+            "no provider has audited this skill; unknown is not safe",
+        )
 
-    parsed: list[ProviderAudit] = []
-    for a in audits:
-        if isinstance(a, dict):
-            parsed.append(ProviderAudit(
-                provider=a.get("provider", "unknown"),
-                status=a.get("status", "fail"),
-                severity=a.get("severity", "LOW"),
-                details=a.get("details", "")
-            ))
-        else:
-            parsed.append(a)
+    worst = max(audits, key=lambda a: a.rank())
 
-    statuses = [p.status for p in parsed]
-    severities = [p.severity for p in parsed]
+    # Dissent means providers actually disagree -- not that one of them omits an
+    # optional field. Socket reports no riskLevel at all, so folding a missing
+    # risk into the comparison flagged unanimous passes as disagreements.
+    status_ranks = {_STATUS_RANK.get(a.status, 1) for a in audits}
+    risk_ranks = {_RISK_RANK.get(a.risk_level, 0) for a in audits if a.risk_level}
+    dissenting = len(status_ranks) > 1 or len(risk_ranks) > 1
+    names = [a.provider for a in audits]
 
-    dissenting = len(set(statuses)) > 1 or len(set(severities)) > 1
+    status, risk = worst.status, worst.risk_level
+    risk_rank = _RISK_RANK.get(risk, 0)
 
-    if any(p.status == "pending" for p in parsed):
-        return TrustVerdict(verdict=VERDICT_DENY, reasons=["pending is not a pass"], dissenting=dissenting)
+    if status == STATUS_FAIL or risk_rank >= _RISK_RANK["HIGH"]:
+        verdict = VERDICT_DENY
+        reason = f"{worst.provider} reports {status}/{risk or 'n/a'}"
+    elif status in (STATUS_PENDING, STATUS_UNKNOWN):
+        verdict = VERDICT_DENY
+        reason = f"{worst.provider} audit is {status}; pending is not a pass"
+    elif status == STATUS_WARN or risk_rank == _RISK_RANK["MEDIUM"]:
+        verdict = VERDICT_APPROVAL
+        reason = f"{worst.provider} reports {status}/{risk or 'n/a'}; review before loading"
+    else:
+        verdict = VERDICT_ALLOW
+        reason = f"all {len(audits)} provider(s) clear"
 
-    if any(p.severity == "CRITICAL" for p in parsed) or any(p.status == "fail" for p in parsed):
-        dissent_note = " — not a majority vote" if dissenting else ""
-        bad_providers = [p.provider for p in parsed if p.severity in ("CRITICAL", "HIGH") or p.status == "fail"]
-        prov_str = ", ".join(bad_providers)
-        return TrustVerdict(verdict=VERDICT_DENY, reasons=[f"critical finding in {prov_str}{dissent_note}"], dissenting=dissenting)
+    if dissenting and verdict != VERDICT_ALLOW:
+        reason += "; verdict taken from the most severe provider, not a majority vote"
 
-    if any(p.severity == "HIGH" for p in parsed):
-        return TrustVerdict(verdict=VERDICT_DENY, reasons=["high risk finding"], dissenting=dissenting)
+    return TrustVerdict(verdict, status, risk, reason, names, dissenting)
 
-    if any(p.severity == "MEDIUM" for p in parsed) or any(p.status == "warn" for p in parsed):
-        return TrustVerdict(verdict=VERDICT_APPROVAL, reasons=["medium risk finding requiring approval"], dissenting=dissenting)
 
-    return TrustVerdict(verdict=VERDICT_ALLOW, reasons=["all audits clear"], dissenting=False)
+def aggregate_api(payload: dict) -> TrustVerdict:
+    """Aggregate directly from a /api/v1/skills/audit/... response body."""
+    return aggregate([ProviderAudit.from_api(a) for a in payload.get("audits", [])])

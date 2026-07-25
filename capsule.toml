@@ -2,11 +2,11 @@
 # Copy, edit, and pass with --config. Absent file means built-in defaults.
 
 [discover]
-roots = ["/mnt/skills/public", "/mnt/skills/examples"]
+roots = ["./skills", "./packs"]
 
 [policy]
-writable_roots = ["/home/claude", "/mnt/user-data/outputs"]
-readonly_roots = ["/mnt/skills", "/mnt/user-data/uploads", "/mnt/transcripts"]
+writable_roots = ["./packs", "./outputs", "./out"]
+readonly_roots = ["./skills", "./docs"]
 
 # Both default false. Each flips a deny to an approval-required allow, and each
 # flip is written to the audit log individually.

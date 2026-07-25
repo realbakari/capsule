@@ -24,7 +24,7 @@ npx skills add realbakari/capsule --skill evaluating
 
 ```bash
 pip install pyyaml pytest
-python3 -m pytest test_capsule.py -q
+python3 -m pytest -q
 ```
 
 ## Use
@@ -57,8 +57,15 @@ you import and register explicitly, never loaded from disk. See
 `references/customization.md`.
 
 `capsule lint` runs your rules plus the OWASP-AST10 starter set, a lethal-trifecta
-detector, and two corpus-level diagnostics — description-budget truncation risk
-and trigger-phrase collisions — that no per-skill validator can perform.
+detector, a description-quality check, and two corpus-level diagnostics —
+description-budget truncation risk and trigger-phrase collisions — that no
+per-skill validator can perform.
+
+The description is the only resident part of a skill and the sole input to
+triggering, so it gets its own check: first- or second-person phrasing (the text
+is injected into a system prompt) and descriptions that say what a skill does but
+never when to use it. Across the 22-skill marketplace corpus that finds two
+skills with no trigger clause at all.
 
 ## Adherence: when the agent ignores the skill
 
@@ -180,7 +187,8 @@ skills.sh to the allowlist for live queries, or keep passing `--fixtures`.
 - `references/context-engineering.md` — the Claude 5 shift, and Capsule's self-audit
 - `references/adherence.md` — obligation contracts and diff verification
 - `references/harness.md` — deny rules, blocking hooks, untrusted-input tiers
-- `tests/test_capsule.py` — 151 tests; the executable specification
+- `tests/test_capsule.py` — 197 tests; the executable specification
+  (33 need the `/mnt/skills` corpus and skip without it)
 
 ## Exit codes
 

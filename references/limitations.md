@@ -317,3 +317,25 @@ plus a real sandbox for isolation, plus behavioral scanning for the language-lev
 attacks that patterns cannot see. Capsule replaces neither of the others, and
 a deployment with only Capsule is a deployment with a good audit trail of
 decisions it could not enforce.
+
+---
+
+## Sources
+
+- Snyk, *ToxicSkills* (Feb 2026) — 3,984 skills scanned; 36.8% flawed, 13.4% critical
+- Snyk, *Why Your Skill Scanner Is Just False Security* (Feb 2026) — pattern-matcher limits
+- OWASP *Agentic Skills Top 10* (AST10 v1.0-2026) — risk taxonomy, Universal Skill Format
+- Antiy CERT, *ClawHavoc Campaign Analysis* — 1,184 malicious skills
+- Check Point Research — CVE-2025-59536, CVE-2026-21852
+- Liu et al. (2023) — lost-in-the-middle / positional degradation
+- *SkillInject*, *SkillJect*, *SkillScope* (arXiv, 2026) — skill-file injection and least-privilege
+- Castillo, *The Downsides of Agentic Skills*; Kinney, *Agent Skills, Stripped of Hype*
+- Aerospike, *Agent Skills Explained: When to Use Them and Why They Fail* — truncation, staleness
+- agentskills/agentskills discussion #404 — skill precedence proposal
+- Anthropic Engineering, *Effective context engineering for AI agents* (Sep 2025)
+- *The new rules of context engineering for Claude 5 generation models* (Jul 2026)
+- *Prompting Claude Fable 5* — `reasoning_extraction` refusals, classifier domains
+- Claude Code *Tools reference*, *Commands*, *Plugins reference* — permission rules,
+  `PreToolUse` hooks, `allowed-tools`, plugin manifests, checkpointing limits
+- *Building verification loops in Claude Code with skills* (Jul 2026)
+- Multi-agent code-assistant study (arXiv:2508.08322) — reviewer agents catch what implementers miss

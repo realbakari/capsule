@@ -1,0 +1,34 @@
+DENY  reconstruct:docx -- license forbids extraction and derivative works
+DENY  reconstruct:file-reading -- license forbids extraction and derivative works
+ALLOW reconstruct:frontend-design -- Apache-2.0 permits derivative works; attribution carried forward
+DENY  reconstruct:pdf -- license forbids extraction and derivative works
+DENY  reconstruct:pdf-reading -- license forbids extraction and derivative works
+DENY  reconstruct:pptx -- license forbids extraction and derivative works
+DENY  reconstruct:product-self-knowledge -- license could not be determined; deny by default
+DENY  reconstruct:xlsx -- license forbids extraction and derivative works
+ALLOW reconstruct:algorithmic-art -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:benepass-reimbursement -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:brand-guidelines -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:call-to-book -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:cancel-unsubscribe -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:canvas-design -- Apache-2.0 permits derivative works; attribution carried forward
+DENY  reconstruct:doc-coauthoring -- license could not be determined; deny by default
+ALLOW reconstruct:event-planning -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:file-expenses -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:file-form -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:financial-calculator -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:grocery-shopping -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:hire-help -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:internal-comms -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:learn -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:mcp-builder -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:meal-delivery -- Apache-2.0 permits derivative works; attribution carried forward
+DENY  reconstruct:morning -- license could not be determined; deny by default
+ALLOW reconstruct:paint -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:prescription-refill -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:return-refund -- Apache-2.0 permits derivative works; attribution carried forward
+DENY  reconstruct:setup-writing-style -- license could not be determined; deny by default
+ALLOW reconstruct:skill-creator -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:slack-gif-creator -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:theme-factory -- Apache-2.0 permits derivative works; attribution carried forward
+ALLOW reconstruct:web-artifacts-builder -- Apache-2.0 permits derivative works; attribution carried forward
