@@ -123,8 +123,12 @@ def description_budget(context: RunContext, budget: int = DEFAULT_DESCRIPTION_BU
     skills = [r for r in context.records if r.source_type in ("skill", "registry")]
     running, at_risk = 0, []
     for record in skills:
-        # Approximates what a host concatenates: name plus description text.
-        entry = len(record.name) + len(record.purpose) + 8
+        # What the host concatenates is name plus *description*. `purpose` is a
+        # prose line read off the body and is often much shorter, which made
+        # this read a 62-skill corpus as 2,745 characters and therefore
+        # comfortable when it was nothing of the sort.
+        text = record.description or record.purpose
+        entry = len(record.name) + len(text) + 8
         running += entry
         if running > budget:
             at_risk.append(record.name)

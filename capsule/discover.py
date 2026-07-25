@@ -146,7 +146,13 @@ def _trigger_phrases(description: str, name: str, limit: int = 12) -> list[str]:
         phrases.append(quoted.strip().lower())
     for ext in re.findall(r"\.\w{2,5}\b", lowered):
         phrases.append(ext)
-    for clause in re.findall(r"(?:use (?:this skill )?(?:when|for)|triggers include)[: ]([^.]{5,120})", lowered):
+    # "Load when ..." and "Read when ..." are as common as "Use when ..." in
+    # corpora that treat skills as reference material rather than actions.
+    for clause in re.findall(
+        r"(?:(?:use|load|read|consult|apply|invoke) (?:this skill )?(?:when|whenever|for)"
+        r"|triggers include)[: ]([^.]{5,120})",
+        lowered,
+    ):
         for part in re.split(r",| or | and ", clause):
             part = part.strip(" :;")
             if 3 <= len(part) <= 48:
@@ -172,12 +178,21 @@ def _shortcuts(body: str, limit: int = 8) -> list[str]:
     return found[:limit]
 
 
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
 def _purpose(body: str, description: str) -> str:
-    """First substantive prose line after the frontmatter, else the description."""
-    stripped = _FRONTMATTER.sub("", body.replace("\r\n", "\n"), count=1).strip()
+    """First substantive prose line after the frontmatter, else the description.
+
+    HTML comments are stripped first. Licence headers are conventionally
+    written as a comment immediately below the frontmatter, and without this
+    every skill in such a corpus reports its purpose as `<!--`.
+    """
+    stripped = _FRONTMATTER.sub("", body.replace("\r\n", "\n"), count=1)
+    stripped = _HTML_COMMENT.sub("", stripped).strip()
     for line in stripped.splitlines():
         line = line.strip()
-        if line and not line.startswith(("#", "|", ">", "-", "*", "`")):
+        if line and not line.startswith(("#", "|", ">", "-", "*", "`", "<")):
             return line[:280]
     return description[:280] or "no purpose statement found"
 
@@ -249,6 +264,7 @@ def discover_skill(skill_dir: Path, policy: Policy, scope: str) -> SourceRecord 
         body_words=len(body.split()),
         aux_dirs=aux,
         content_hash=_hash(body),
+        description=description,
     )
     return record
 
@@ -322,7 +338,54 @@ def discover_agent(path: Path, scope: str) -> SourceRecord | None:
         content_hash=_hash(body),
         tool_grants=tools,
         model=str(front.get("model") or ""),
+        description=description,
     )
+
+
+def _walk(root: Path, max_depth: int):
+    """Yield `(file, depth)` under root, following directory symlinks.
+
+    `Path.rglob` does not traverse symlinked directories, and the standard
+    install layout is built entirely out of them: `npx skills add` writes one
+    copy under `~/.agents/skills/` and symlinks it into each host's directory,
+    so `~/.claude/skills/find-skills` is a link rather than a folder. Walking
+    with rglob therefore finds nothing at all in a host directory, and reports
+    success while doing it.
+
+    Cycles are bounded by remembering resolved directories, which also means a
+    skill reachable from several hosts is walked once rather than once per
+    host.
+    """
+    seen_dirs: set[str] = set()
+    stack: list[tuple[Path, int]] = [(root, 0)]
+
+    while stack:
+        current, depth = stack.pop()
+        if depth > max_depth:
+            continue
+        try:
+            resolved = str(current.resolve())
+        except OSError:
+            continue
+        if resolved in seen_dirs:
+            continue
+        seen_dirs.add(resolved)
+
+        try:
+            entries = sorted(current.iterdir())
+        except OSError:
+            continue
+
+        for entry in entries:
+            if entry.name in SKIP_DIRS:
+                continue
+            try:
+                if entry.is_dir():
+                    stack.append((entry, depth + 1))
+                elif entry.is_file():
+                    yield entry, depth + 1
+            except OSError:
+                continue
 
 
 def _simple_record(path: Path, source_type: str, category: str, scope: str) -> SourceRecord:
@@ -367,25 +430,19 @@ def discover(roots: list[str], policy: Policy, max_depth: int = 6) -> RunContext
 
         scope = "external-trusted" if str(root).startswith("/mnt/skills") else "repo"
 
-        for path in sorted(root.rglob("*")):
-            if any(part in SKIP_DIRS for part in path.parts):
-                continue
-            try:
-                depth = len(path.relative_to(root).parts)
-            except ValueError:
-                continue
-            if depth > max_depth:
-                continue
-
-            if path.is_dir():
-                continue
-
-            # 4/5. skills (dedup by directory)
+        for path, depth in _walk(root, max_depth):
+            # 4/5. skills. Dedup by *resolved* directory: the same skill is
+            # routinely symlinked into several host directories, and that is
+            # one skill installed once, not one per host.
             if path.name == "SKILL.md":
                 skill_dir = path.parent
-                if str(skill_dir) in seen_skills:
+                try:
+                    key = str(skill_dir.resolve())
+                except OSError:
+                    key = str(skill_dir)
+                if key in seen_skills:
                     continue
-                seen_skills.add(str(skill_dir))
+                seen_skills.add(key)
                 record = discover_skill(skill_dir, policy, scope)
                 if record:
                     context.records.append(record)

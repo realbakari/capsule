@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from capsule.discover import (  # noqa: E402
-    discover, discover_agent, parse_frontmatter, _trigger_phrases,
+    discover, discover_agent, discover_skill, parse_frontmatter, _trigger_phrases,
 )
 from capsule.policy import Policy, PolicyError  # noqa: E402
 
@@ -2010,6 +2010,121 @@ def test_capsule_own_description_is_well_formed():
     front = parse_frontmatter(body)
     findings = description_quality(str(front.get("description") or ""))
     assert not [f for f in findings if f.severity in ("high", "medium")], findings
+
+
+# -- reading the right text ---------------------------------------------------
+
+def test_purpose_skips_a_licence_header_comment(tmp_path):
+    """Regression: every skill in a real corpus reported its purpose as '<!--'.
+
+    A licence header written as an HTML comment directly under the frontmatter
+    is a common convention, and the purpose scan stopped on its first line.
+    """
+    d = tmp_path / "s"
+    d.mkdir()
+    (d / "SKILL.md").write_text(
+        "---\nname: s\ndescription: Does a thing. Use when asked.\n---\n"
+        "<!--\nCopyright 2026 Example Inc.\nSPDX-License-Identifier: Apache-2.0\n-->\n\n"
+        "# Heading\n\nThe real summary line.\n"
+    )
+    record = discover_skill(d, Policy(), "repo")
+    assert record.purpose == "The real summary line."
+
+
+def test_load_when_is_extracted_as_a_trigger(tmp_path):
+    """Corpora of reference material say "Load when", not "Use when"."""
+    phrases = _trigger_phrases(
+        "Create WebSocket connections. Load when implementing real-time data "
+        "streaming, custom server communication, or live data feeds.",
+        "specs-websocket",
+    )
+    assert "implementing real-time data streaming" in phrases
+    assert "live data feeds" in phrases
+
+
+def test_load_when_counts_as_a_trigger_clause():
+    findings = description_quality(
+        "Create real-time WebSocket connections from the InternetModule. "
+        "Load when implementing real-time data streaming or live data feeds."
+    )
+    assert not any(f.check == "description-no-trigger" for f in findings)
+
+
+def test_budget_measures_the_description_not_the_purpose():
+    """Regression: the budget read a 62-skill corpus as comfortable.
+
+    `purpose` is a prose line off the body and is often far shorter than the
+    description the host actually concatenates, so the measurement understated
+    the real total by roughly sevenfold and reported OK while over budget.
+    """
+    long_description = "x" * 400
+    ctx = RunContext(records=[
+        SourceRecord("skill", "/a", "a", "c", "short purpose", description=long_description),
+        SourceRecord("skill", "/b", "b", "c", "short purpose", description=long_description),
+    ])
+    report = description_budget(ctx, budget=500)
+    assert report.over_budget
+    assert report.total_chars > 800
+
+
+# -- symlinked skill directories ----------------------------------------------
+
+def _real_skill(root: Path, name: str) -> Path:
+    d = root / name
+    d.mkdir(parents=True)
+    (d / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: Does {name}. Use when asked for {name}.\n---\n# {name}\n"
+    )
+    return d
+
+
+def test_discovery_follows_symlinked_skill_directories(tmp_path):
+    """Regression: the standard install layout was invisible.
+
+    `npx skills add` writes one copy under ~/.agents/skills and symlinks it
+    into each host directory, so ~/.claude/skills/<name> is a link. Path.rglob
+    does not traverse symlinked directories, so indexing a host directory found
+    nothing at all -- and reported success while doing it.
+    """
+    canonical = tmp_path / "canonical"
+    canonical.mkdir()
+    _real_skill(canonical, "find-skills")
+
+    host = tmp_path / "host"
+    host.mkdir()
+    (host / "find-skills").symlink_to(canonical / "find-skills")
+
+    ctx = discover([str(host)], Policy())
+    assert [r.name for r in ctx.of_type("skill")] == ["find-skills"]
+
+
+def test_same_skill_symlinked_into_several_hosts_is_indexed_once(tmp_path):
+    """One skill installed once, exposed to four hosts -- not four skills."""
+    canonical = tmp_path / "canonical"
+    canonical.mkdir()
+    _real_skill(canonical, "resend")
+
+    hosts = []
+    for host_name in ("claude", "codex", "pi", "cursor"):
+        h = tmp_path / host_name / "skills"
+        h.mkdir(parents=True)
+        (h / "resend").symlink_to(canonical / "resend")
+        hosts.append(str(h))
+
+    ctx = discover(hosts, Policy())
+    skills = ctx.of_type("skill")
+    assert len(skills) == 1, [r.source_path for r in skills]
+    assert skills[0].source_path == str((canonical / "resend").resolve())
+
+
+def test_symlink_cycles_do_not_hang_discovery(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    _real_skill(root, "a")
+    (root / "loop").symlink_to(root)
+
+    ctx = discover([str(root)], Policy())
+    assert [r.name for r in ctx.of_type("skill")] == ["a"]
 
 
 # -- agent definitions --------------------------------------------------------

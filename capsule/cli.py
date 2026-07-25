@@ -28,7 +28,7 @@ from .harness import (
     ArtifactEntry, SkillMeta, classify_input_provenance,
     emit_all, emit_all_plugins, split_obligations,
 )
-from .discover import discover, parse_frontmatter
+from .discover import discover
 from .health import analyze, description_quality, summarize, tool_grant_risk
 from .registry import FixtureTransport, HttpTransport, Registry, RegistryError
 from .policy import Policy, PolicyError
@@ -83,6 +83,20 @@ def cmd_index(args: argparse.Namespace) -> int:
     skills = context.of_type("skill")
     ok = [r for r in skills if r.reconstructable]
     print(bold(f"indexed {len(context.records)} sources from {len(roots)} root(s) -> {args.out}"))
+
+    # An empty index is almost always a pointing error, and every later command
+    # reads it happily: routing finds no candidate, lint finds no problem, and
+    # verify passes an empty contract. Say so here rather than letting the
+    # emptiness propagate as a clean bill of health.
+    if not context.records:
+        missing = [r for r in roots if not Path(r).exists()]
+        print(
+            red("  no sources found.") + " Check the roots are correct"
+            + (f"; these do not exist: {', '.join(missing)}" if missing else "")
+            + ".",
+            file=sys.stderr,
+        )
+        return 1
     print(f"  skills: {len(skills)}  reconstructable: {len(ok)}  gated: {len(skills) - len(ok)}")
 
     # Category grouping.
@@ -410,11 +424,7 @@ def cmd_lint(args: argparse.Namespace) -> int:
     print(bold("== description quality =="))
     weak = 0
     for record in context.of_type("skill"):
-        body_path = Path(record.source_path) / "SKILL.md"
-        if not body_path.exists():
-            continue
-        front = parse_frontmatter(body_path.read_text(errors="replace"))
-        findings = description_quality(str(front.get("description") or ""))
+        findings = description_quality(record.description)
         if findings:
             weak += 1
             print(f"  {record.name}:")

@@ -306,9 +306,11 @@ _FIRST_OR_SECOND_PERSON = re.compile(
 # check people route around is worse than no check. Over-passing a weak
 # description costs far less than false-flagging a good one.
 _TRIGGER_CLAUSE = re.compile(
-    r"\b(?:use|used|using|apply|invoke|trigger|triggers|reach for|call)\b"
+    r"\b(?:use|used|using|load|read|consult|reference|apply|invoke|trigger|"
+    r"triggers|reach for|call)\b"
     r"[^.]{0,40}?\bwhen(?:ever)?\b"
-    r"|\bwhen(?:ever)?\s+(?:the\s+)?(?:user|you|someone|a\s+user|working|asked)\b"
+    r"|\bwhen(?:ever)?\s+(?:the\s+)?"
+    r"(?:user|you|someone|a\s+user|working|asked|implementing|building|writing|creating)\b"
     r"|\btriggers?\s+(?:on|include|when)\b"
     r"|\bshould be used\b"
     r"|\buse\s+(?:this\s+)?(?:skill\s+)?(?:for|if)\b",

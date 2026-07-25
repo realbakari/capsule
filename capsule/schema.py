@@ -71,6 +71,12 @@ class SourceRecord:
     tool_grants: list[str] = field(default_factory=list)
     model: str = ""
 
+    # The frontmatter description, verbatim. Distinct from `purpose`, which is
+    # a prose summary read off the body: the description is what the host
+    # concatenates into the selection context, so it is the only correct input
+    # to budget and triggering checks.
+    description: str = ""
+
     # Registry provenance and trust. Populated for source_type "registry"; left
     # empty for local sources, which are governed by the license gate instead.
     registry_id: str = ""

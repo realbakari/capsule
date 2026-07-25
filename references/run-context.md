@@ -25,6 +25,41 @@ both read fields that look decorative.
 `lifecycle`, `tool_grants`, `model`. These exist so a policy decision can be
 replayed from the index alone, without re-reading the filesystem.
 
+## Symlinked skill directories
+
+Discovery follows directory symlinks. The standard install layout is built
+entirely out of them: `npx skills add` writes one copy under `~/.agents/skills/`
+and symlinks it into each host's directory, so `~/.claude/skills/find-skills` is
+a link rather than a folder. `Path.rglob` does not traverse symlinked
+directories, so indexing a host directory found **nothing** — and exited 0 while
+reporting `indexed 0 sources`.
+
+Skills dedup by *resolved* target, so one skill exposed to four hosts is one
+record, not four. `source_path` is the canonical path. Cycles are bounded by
+remembering resolved directories.
+
+`capsule index` now exits `1` when a run produces no records at all. An empty
+index is almost always a pointing error, and every later command reads it
+happily: routing finds no candidate, lint finds no problem, and `verify` passes
+an empty contract.
+
+## `description` vs `purpose`
+
+Two fields that look interchangeable and are not:
+
+- `description` — the frontmatter description, verbatim. This is what the host
+  concatenates into the selection context, so it is the only correct input to
+  budget and triggering checks.
+- `purpose` — a prose summary read off the body, for human scanning.
+
+Conflating them understated a 62-skill corpus at 2,745 characters against a
+12,000 budget — comfortable. Measured correctly it is 18,972, over by half
+again, with six skills past the truncation line.
+
+`purpose` skips HTML comments. A licence header written as a comment under the
+frontmatter is a common convention, and without that every skill in such a
+corpus reports its purpose as `<!--`.
+
 ## Agent definitions
 
 Any `.md` directly under an `agents/` directory is indexed as `source_type:
