@@ -24,6 +24,7 @@ class SourceRecord:
     reconstructable: bool = False
     installs: int = 0
     trust_verdict: str = "allow"
+    lifecycle: str = "stable"
 
     def __post_init__(self):
         valid_types = {"skill", "doc", "instruction", "registry"}
@@ -31,6 +32,9 @@ class SourceRecord:
             raise ValueError(f"unknown source_type: {self.source_type}")
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError(f"confidence out of range: {self.confidence}")
+        valid_lifecycles = {"stable", "in-progress", "deprecated"}
+        if self.lifecycle not in valid_lifecycles:
+            raise ValueError(f"unknown lifecycle: {self.lifecycle}")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -64,6 +68,12 @@ class RunContext:
 
     def of_type(self, source_type: str) -> list[SourceRecord]:
         return [r for r in self.records if r.source_type == source_type]
+
+    def of_category(self, category: str) -> list[SourceRecord]:
+        return [r for r in self.records if r.category == category]
+
+    def of_lifecycle(self, lifecycle: str) -> list[SourceRecord]:
+        return [r for r in self.records if r.lifecycle == lifecycle]
 
     def by_name(self, name: str) -> Optional[SourceRecord]:
         for r in self.records:

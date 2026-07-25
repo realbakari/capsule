@@ -19,7 +19,15 @@ def _sandbox(tmp_path) -> Policy:
 from capsule.reconstruct import reconstruct  # noqa: E402
 from capsule.router import classify, route, _mentions  # noqa: E402
 from capsule.schema import RunContext, SourceRecord  # noqa: E402
-from capsule.validate import validate_pack  # noqa: E402
+from capsule.validate import validate_pack, validate_references  # noqa: E402
+from capsule.evals import (  # noqa: E402
+    Assertion, EvalCase, EvalSuite, EvalReport,
+    run_case, run_eval, run_eval_per_case, load_evals,
+)
+from capsule.harness import (  # noqa: E402
+    SkillMeta, claude_plugin_manifest, codex_plugin_manifest,
+    cursor_plugin_manifest, grok_plugin_manifest, emit_all_plugins,
+)
 
 SKILL_ROOTS = ["/mnt/skills/public", "/mnt/skills/examples"]
 MOUNTS_PRESENT = all(Path(r).exists() for r in SKILL_ROOTS)
@@ -1397,3 +1405,391 @@ def test_harness_emission_respects_the_write_gate(tmp_path):
     assert policy.can_write(tmp_path / "settings.json").allowed
     assert not policy.can_write("/mnt/skills/public/docx/settings.json").allowed
     assert emit_all(contract, tmp_path)
+
+
+# -- evals -------------------------------------------------------------------
+
+def test_assertion_contains():
+    a = Assertion(kind="contains", pattern="import Resend")
+    assert a.check("import Resend from 'resend'")
+    assert not a.check("import Something from 'other'")
+
+
+def test_assertion_not_contains():
+    a = Assertion(kind="not_contains", pattern="console.log")
+    assert a.check("clean code")
+    assert not a.check("console.log('debug')")
+
+
+def test_assertion_regex():
+    a = Assertion(kind="regex", pattern=r"from ['\"]resend['\"]")
+    assert a.check("import { Resend } from 'resend'")
+    assert a.check('import { Resend } from "resend"')
+    assert not a.check("import { Resend } from 'other'")
+
+
+def test_assertion_not_regex():
+    a = Assertion(kind="not_regex", pattern=r"TODO|FIXME")
+    assert a.check("clean code")
+    assert not a.check("// TODO: fix this")
+
+
+def test_eval_case_from_dict():
+    data = {
+        "id": "test-1",
+        "prompt": "Send an email",
+        "skill_name": "resend",
+        "assertions": [
+            {"kind": "contains", "pattern": "Resend", "message": "uses Resend SDK"},
+            {"kind": "not_contains", "pattern": "nodemailer"},
+        ],
+        "tags": ["email", "sdk"],
+        "description": "Should use Resend SDK not nodemailer",
+    }
+    case = EvalCase.from_dict(data)
+    assert case.id == "test-1"
+    assert len(case.assertions) == 2
+    assert case.tags == ["email", "sdk"]
+
+
+def test_eval_suite_from_json():
+    json_str = '{"skill_name": "resend", "version": "1", "cases": [{"id": "c1", "prompt": "send", "skill_name": "resend", "assertions": [{"kind": "contains", "pattern": "Resend"}]}]}'
+    suite = EvalSuite.from_json(json_str)
+    assert suite.skill_name == "resend"
+    assert len(suite.cases) == 1
+
+
+def test_run_case_passes_all_assertions():
+    case = EvalCase(
+        id="t1", prompt="send email", skill_name="resend",
+        assertions=[
+            Assertion("contains", "Resend"),
+            Assertion("not_contains", "nodemailer"),
+        ],
+    )
+    result = run_case(case, "import { Resend } from 'resend';")
+    assert result.passed
+    assert result.failed_count == 0
+
+
+def test_run_case_detects_failures():
+    case = EvalCase(
+        id="t2", prompt="send email", skill_name="resend",
+        assertions=[
+            Assertion("contains", "Resend"),
+            Assertion("contains", "apiKey"),
+        ],
+    )
+    result = run_case(case, "import nodemailer")
+    assert not result.passed
+    assert result.failed_count == 2
+
+
+def test_run_eval_full_suite():
+    suite = EvalSuite(
+        skill_name="resend",
+        cases=[
+            EvalCase(
+                id="c1", prompt="p1", skill_name="resend",
+                assertions=[Assertion("contains", "Resend")],
+            ),
+            EvalCase(
+                id="c2", prompt="p2", skill_name="resend",
+                assertions=[Assertion("contains", "missing-token")],
+            ),
+        ],
+    )
+    report = run_eval(suite, "import { Resend } from 'resend';")
+    assert report.pass_count == 1
+    assert report.fail_count == 1
+    assert not report.passed
+    assert "1/2 passed" in report.report()
+
+
+def test_run_eval_per_case():
+    suite = EvalSuite(
+        skill_name="test",
+        cases=[
+            EvalCase(id="a", prompt="p", skill_name="s",
+                     assertions=[Assertion("contains", "alpha")]),
+            EvalCase(id="b", prompt="p", skill_name="s",
+                     assertions=[Assertion("contains", "beta")]),
+        ],
+    )
+    report = run_eval_per_case(suite, {"a": "alpha here", "b": "beta here"})
+    assert report.passed
+    assert report.pass_count == 2
+
+
+def test_load_evals_from_directory(tmp_path):
+    evals_dir = tmp_path / "skill-evals" / "my-skill"
+    evals_dir.mkdir(parents=True)
+    evals_json = {
+        "skill_name": "my-skill",
+        "cases": [{"id": "t1", "prompt": "do thing", "skill_name": "my-skill",
+                   "assertions": [{"kind": "contains", "pattern": "done"}]}],
+    }
+    import json
+    (evals_dir / "evals.json").write_text(json.dumps(evals_json))
+
+    suites = load_evals(tmp_path)
+    assert len(suites) == 1
+    assert suites[0].skill_name == "my-skill"
+
+
+def test_load_evals_from_single_file(tmp_path):
+    evals_json = {
+        "skill_name": "direct",
+        "cases": [{"id": "t1", "prompt": "p", "skill_name": "direct",
+                   "assertions": [{"kind": "contains", "pattern": "x"}]}],
+    }
+    import json
+    f = tmp_path / "evals.json"
+    f.write_text(json.dumps(evals_json))
+    suites = load_evals(f)
+    assert len(suites) == 1
+
+
+def test_eval_report_format():
+    suite = EvalSuite(
+        skill_name="fmt-test",
+        cases=[EvalCase(id="c1", prompt="p", skill_name="s",
+                        assertions=[Assertion("contains", "x")],
+                        description="check x")],
+    )
+    report = run_eval(suite, "x is here")
+    text = report.report()
+    assert "fmt-test" in text
+    assert "PASS" in text
+    assert "1/1 passed" in text
+
+
+# -- plugin manifests ---------------------------------------------------------
+
+def test_claude_plugin_manifest_structure():
+    skills = [
+        SkillMeta(name="auth", description="Authentication skill"),
+        SkillMeta(name="storage", description="Storage skill"),
+        SkillMeta(name="old", description="Old skill", lifecycle="deprecated"),
+    ]
+    result = claude_plugin_manifest(skills, "acme/agent-skills")
+    assert "plugin.json" in result
+    assert "marketplace.json" in result
+    plugin = result["plugin.json"]
+    assert plugin["name"] == "agent-skills"
+    # Deprecated skills should be excluded.
+    assert len(plugin["skills"]) == 2
+    assert all(s["name"] != "old" for s in plugin["skills"])
+    marketplace = result["marketplace.json"]
+    assert "old" not in marketplace["skills"]
+
+
+def test_codex_plugin_manifest_uses_agents_key():
+    skills = [SkillMeta(name="db", description="Database skill")]
+    result = codex_plugin_manifest(skills, "acme/skills")
+    plugin = result["plugin.json"]
+    assert "agents" in plugin
+    assert plugin["agents"][0]["instructions"] == "skills/db/SKILL.md"
+
+
+def test_cursor_plugin_has_marketplace():
+    skills = [SkillMeta(name="api", description="API skill")]
+    result = cursor_plugin_manifest(skills, "acme/skills")
+    assert "marketplace.json" in result
+    assert result["marketplace.json"]["repository"] == "https://github.com/acme/skills"
+
+
+def test_grok_plugin_uses_instructions_file():
+    skills = [SkillMeta(name="email", description="Email")]
+    result = grok_plugin_manifest(skills, "acme/skills")
+    plugin = result["plugin.json"]
+    assert plugin["skills"][0]["instructions_file"] == "skills/email/SKILL.md"
+
+
+def test_emit_all_plugins_creates_all_hosts(tmp_path):
+    skills = [
+        SkillMeta(name="core", description="Core skill"),
+        SkillMeta(name="extra", description="Extra skill"),
+    ]
+    entries = emit_all_plugins(skills, "org/repo", tmp_path)
+    paths = {e.path for e in entries}
+    assert ".claude-plugin/plugin.json" in paths
+    assert ".claude-plugin/marketplace.json" in paths
+    assert ".codex-plugin/plugin.json" in paths
+    assert ".cursor-plugin/plugin.json" in paths
+    assert ".cursor-plugin/marketplace.json" in paths
+    assert ".grok-plugin/plugin.json" in paths
+    assert len(entries) == 6
+
+
+def test_plugin_manifests_exclude_deprecated():
+    skills = [
+        SkillMeta(name="active", description="Active", lifecycle="stable"),
+        SkillMeta(name="legacy", description="Legacy", lifecycle="deprecated"),
+    ]
+    for gen_fn in [claude_plugin_manifest, codex_plugin_manifest,
+                   cursor_plugin_manifest, grok_plugin_manifest]:
+        result = gen_fn(skills, "org/repo")
+        plugin = result["plugin.json"]
+        skill_list = plugin.get("skills") or plugin.get("agents", [])
+        names = [s["name"] for s in skill_list]
+        assert "active" in names
+        assert "legacy" not in names
+
+
+# -- references validation ----------------------------------------------------
+
+def test_validate_references_clean(tmp_path):
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    refs = skill_dir / "references"
+    refs.mkdir()
+    (refs / "setup.md").write_text("# Setup")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\n---\nSee [setup](references/setup.md).\n"
+    )
+    problems = validate_references(skill_dir)
+    assert problems == []
+
+
+def test_validate_references_broken_link(tmp_path):
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    refs = skill_dir / "references"
+    refs.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\n---\nSee [docs](references/missing.md).\n"
+    )
+    problems = validate_references(skill_dir)
+    assert any("broken reference" in p for p in problems)
+
+
+def test_validate_references_orphaned(tmp_path):
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    refs = skill_dir / "references"
+    refs.mkdir()
+    (refs / "linked.md").write_text("# Linked")
+    (refs / "orphan.md").write_text("# Orphan")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\n---\nSee [linked](references/linked.md).\n"
+    )
+    problems = validate_references(skill_dir)
+    assert any("orphaned reference" in p for p in problems)
+    assert not any("linked.md" in p and "orphaned" in p for p in problems)
+
+
+def test_validate_references_underscore_not_orphaned(tmp_path):
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    refs = skill_dir / "references"
+    refs.mkdir()
+    (refs / "_internal.md").write_text("# Internal")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\n---\nContent.\n"
+    )
+    problems = validate_references(skill_dir)
+    assert not any("_internal" in p for p in problems)
+
+
+def test_validate_pack_includes_reference_problems(tmp_path):
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    refs = skill_dir / "references"
+    refs.mkdir()
+    (refs / "orphan.md").write_text("# Orphan")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\n---\nContent.\n"
+    )
+    ok, problems = validate_pack(skill_dir)
+    assert not ok
+    assert any("orphaned reference" in p for p in problems)
+
+
+def test_validate_references_no_refs_dir(tmp_path):
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("---\nname: my-skill\n---\nContent.\n")
+    problems = validate_references(skill_dir)
+    assert problems == []
+
+
+# -- taxonomy & lifecycle -----------------------------------------------------
+
+def test_lifecycle_field_defaults_to_stable():
+    r = SourceRecord("skill", "/x", "x", "c", "p")
+    assert r.lifecycle == "stable"
+
+
+def test_lifecycle_rejects_invalid_value():
+    with pytest.raises(ValueError, match="unknown lifecycle"):
+        SourceRecord("skill", "/x", "x", "c", "p", lifecycle="alpha")
+
+
+def test_lifecycle_accepts_all_valid_values():
+    for lc in ("stable", "in-progress", "deprecated"):
+        r = SourceRecord("skill", "/x", "x", "c", "p", lifecycle=lc)
+        assert r.lifecycle == lc
+
+
+def test_run_context_of_category():
+    ctx = RunContext(records=[
+        SourceRecord("skill", "/a", "a", "engineering", "p"),
+        SourceRecord("skill", "/b", "b", "productivity", "p"),
+        SourceRecord("skill", "/c", "c", "engineering", "p"),
+    ])
+    eng = ctx.of_category("engineering")
+    assert len(eng) == 2
+    assert all(r.category == "engineering" for r in eng)
+
+
+def test_run_context_of_lifecycle():
+    ctx = RunContext(records=[
+        SourceRecord("skill", "/a", "a", "c", "p", lifecycle="stable"),
+        SourceRecord("skill", "/b", "b", "c", "p", lifecycle="deprecated"),
+    ])
+    stable = ctx.of_lifecycle("stable")
+    assert len(stable) == 1
+    assert stable[0].name == "a"
+
+
+def test_discover_infers_category_from_nesting(tmp_path):
+    eng = tmp_path / "skills" / "engineering" / "tdd"
+    eng.mkdir(parents=True)
+    (eng / "SKILL.md").write_text("---\nname: tdd\ndescription: TDD skill\n---\n# TDD\n")
+
+    ctx = discover([str(tmp_path)], Policy())
+    assert len(ctx.records) == 1
+    assert ctx.records[0].category == "engineering"
+    assert ctx.records[0].lifecycle == "stable"
+
+
+def test_discover_infers_deprecated_lifecycle(tmp_path):
+    dep = tmp_path / "skills" / "deprecated" / "old-skill"
+    dep.mkdir(parents=True)
+    (dep / "SKILL.md").write_text("---\nname: old-skill\ndescription: Old\n---\n# Old\n")
+
+    ctx = discover([str(tmp_path)], Policy())
+    assert len(ctx.records) == 1
+    assert ctx.records[0].lifecycle == "deprecated"
+
+
+def test_discover_frontmatter_lifecycle_overrides_directory(tmp_path):
+    skill = tmp_path / "skills" / "engineering" / "beta-tool"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: beta-tool\ndescription: Beta\nlifecycle: in-progress\n---\n# Beta\n"
+    )
+
+    ctx = discover([str(tmp_path)], Policy())
+    assert ctx.records[0].lifecycle == "in-progress"
+
+
+def test_validate_pack_accepts_lifecycle_frontmatter(tmp_path):
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\nlifecycle: deprecated\n---\nContent.\n"
+    )
+    ok, problems = validate_pack(skill_dir)
+    assert ok, f"unexpected problems: {problems}"

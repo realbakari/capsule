@@ -144,3 +144,148 @@ def classify_input_provenance(name: str, body: str) -> Provenance:
             return Provenance(tier=FETCH_INDEXED, rank=1, evidence="uses cached fetch with fallback")
         return Provenance(tier=FETCH_LIVE, rank=2, evidence="live fetching active")
     return Provenance(tier=FETCH_DISABLED, rank=0, evidence="no network fetch")
+
+
+# -- Multi-host plugin manifest generation ------------------------------------
+# Following the patterns from resend/resend-skills (4 hosts) and
+# supabase/agent-skills (Claude plugin + marketplace).
+
+
+@dataclass
+class SkillMeta:
+    """Minimal metadata about a skill for plugin manifest generation."""
+    name: str
+    description: str
+    category: str = "general"
+    lifecycle: str = "stable"
+
+
+def claude_plugin_manifest(
+    skills: list[SkillMeta], repo_slug: str
+) -> dict:
+    """Generate .claude-plugin/plugin.json and marketplace.json contents."""
+    return {
+        "plugin.json": {
+            "name": repo_slug.split("/")[-1],
+            "version": "1.0.0",
+            "description": f"Agent skills from {repo_slug}",
+            "skills": [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "path": f"skills/{s.name}",
+                }
+                for s in skills
+                if s.lifecycle != "deprecated"
+            ],
+        },
+        "marketplace.json": {
+            "name": repo_slug.split("/")[-1],
+            "display_name": repo_slug,
+            "repository": f"https://github.com/{repo_slug}",
+            "skills": [s.name for s in skills if s.lifecycle != "deprecated"],
+        },
+    }
+
+
+def codex_plugin_manifest(
+    skills: list[SkillMeta], repo_slug: str
+) -> dict:
+    """Generate .codex-plugin/plugin.json contents."""
+    return {
+        "plugin.json": {
+            "name": repo_slug.split("/")[-1],
+            "version": "1.0.0",
+            "description": f"Agent skills from {repo_slug}",
+            "agents": [
+                {
+                    "name": s.name,
+                    "instructions": f"skills/{s.name}/SKILL.md",
+                }
+                for s in skills
+                if s.lifecycle != "deprecated"
+            ],
+        },
+    }
+
+
+def cursor_plugin_manifest(
+    skills: list[SkillMeta], repo_slug: str
+) -> dict:
+    """Generate .cursor-plugin/plugin.json and marketplace.json contents."""
+    return {
+        "plugin.json": {
+            "name": repo_slug.split("/")[-1],
+            "version": "1.0.0",
+            "description": f"Agent skills from {repo_slug}",
+            "skills": [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "path": f"skills/{s.name}",
+                }
+                for s in skills
+                if s.lifecycle != "deprecated"
+            ],
+        },
+        "marketplace.json": {
+            "name": repo_slug.split("/")[-1],
+            "repository": f"https://github.com/{repo_slug}",
+        },
+    }
+
+
+def grok_plugin_manifest(
+    skills: list[SkillMeta], repo_slug: str
+) -> dict:
+    """Generate .grok-plugin/plugin.json contents."""
+    return {
+        "plugin.json": {
+            "name": repo_slug.split("/")[-1],
+            "version": "1.0.0",
+            "description": f"Agent skills from {repo_slug}",
+            "skills": [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "instructions_file": f"skills/{s.name}/SKILL.md",
+                }
+                for s in skills
+                if s.lifecycle != "deprecated"
+            ],
+        },
+    }
+
+
+def emit_all_plugins(
+    skills: list[SkillMeta],
+    repo_slug: str,
+    output_dir: str | Path,
+) -> list[ArtifactEntry]:
+    """Write all plugin manifest directories to output_dir.
+
+    Creates:
+      .claude-plugin/plugin.json
+      .claude-plugin/marketplace.json
+      .codex-plugin/plugin.json
+      .cursor-plugin/plugin.json
+      .cursor-plugin/marketplace.json
+      .grok-plugin/plugin.json
+    """
+    dest = Path(output_dir)
+    entries: list[ArtifactEntry] = []
+
+    generators = {
+        ".claude-plugin": claude_plugin_manifest,
+        ".codex-plugin": codex_plugin_manifest,
+        ".cursor-plugin": cursor_plugin_manifest,
+        ".grok-plugin": grok_plugin_manifest,
+    }
+
+    for dir_name, gen_fn in generators.items():
+        manifest = gen_fn(skills, repo_slug)
+        for filename, content in manifest.items():
+            rel_path = f"{dir_name}/{filename}"
+            entries.append(ArtifactEntry(rel_path, json.dumps(content, indent=2)))
+
+    return entries

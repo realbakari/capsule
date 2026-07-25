@@ -1,0 +1,11 @@
+{
+  "name": "capsule",
+  "version": "0.1.0",
+  "description": "Agent skill control plane — schema validation, contract enforcement, trust auditing, and multi-host plugin generation.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/realbakari/capsule"
+  },
+  "license": "MIT",
+  "skills": "skills/"
+}
