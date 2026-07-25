@@ -1,0 +1,60 @@
+# Capsule configuration. Every knob Capsule exposes lives here.
+# Copy, edit, and pass with --config. Absent file means built-in defaults.
+
+[discover]
+roots = ["/mnt/skills/public", "/mnt/skills/examples"]
+
+[policy]
+writable_roots = ["/home/claude", "/mnt/user-data/outputs"]
+readonly_roots = ["/mnt/skills", "/mnt/user-data/uploads", "/mnt/transcripts"]
+
+# Both default false. Each flips a deny to an approval-required allow, and each
+# flip is written to the audit log individually.
+allow_restricted_reconstruction = false
+allow_unaudited_registry_skills = false
+
+# Keep the OWASP AST10 starter rules. Set false to run only your own.
+use_default_rules = true
+
+[routing]
+min_score = 1.5
+shortlist_size = 4
+
+# Combined skill descriptions past this budget risk silent truncation, where
+# overflow skills stop triggering with no error anywhere. Tune to your host.
+description_budget = 12000
+
+# Specialisation relationships. The skill format has no way to express that one
+# skill is a narrower case of another, so overlapping skills from unrelated
+# authors compete arbitrarily. Declare the relationship instead.
+[[routing.precedence]]
+prefer = "pdf-reading"
+over = "pdf"
+when = "extract"
+reason = "pdf owns creation and forms; pdf-reading owns extraction"
+
+[[routing.precedence]]
+prefer = "skill-creator"
+over = "web-artifacts-builder"
+when = "skill"
+reason = "both match on 'build'; only one authors skills"
+
+# --- custom rules ------------------------------------------------------------
+# Matchers are ANDed. Actions: deny | approval | flag.
+# Rules escalate only: they can tighten a built-in allow, never clear a denial.
+
+[[rules]]
+id = "org-no-external-registry"
+description = "This org pins skills to the local monorepo."
+action = "approval"
+applies_to = "registry"
+reason = "external registry skills require security review before first use"
+min_installs = 0
+
+[[rules]]
+id = "org-no-phone-calls"
+description = "Skills that place outbound phone calls need sign-off."
+action = "approval"
+applies_to = "skill"
+reason = "outbound telephony has cost and consent implications"
+body_regex = "(place a call|dial |outbound call|phone the)"
