@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Verify CLI subcommands
+        run: |
+          for cmd in index show route reconstruct validate audit eval emit-plugins schema doctor lint brief contract verify harness registry; do
+            capsule "$cmd" --help > /dev/null 2>&1 || { echo "FAIL $cmd"; exit 1; }
+          done
+          echo "all 16 commands ok"
+
+      - name: Validate pack
+        run: capsule validate .
