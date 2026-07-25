@@ -238,6 +238,41 @@ class Changeset:
         return cls(paths=paths, added_lines=added)
 
 
+_CODE_SPAN = re.compile(r"`([^`\n]+)`")
+
+
+def _code_spans_after(clause: str, start: int) -> list[str]:
+    """Code spans in `clause` that begin at or after `start`.
+
+    Pairing is computed over the whole clause and filtered by position, never
+    over a substring. Slicing first re-pairs the backticks: in
+
+        declare `@input m: InternetModule` (or `require('X')`)
+
+    a slice beginning at `require` opens on the closing backtick of the first
+    span, so the "code" extracted is the prose between spans -- ` to `, `/`,
+    `), bind `. Those became obligations, and the contract reported 100%
+    coverage while enforcing nothing real.
+    """
+    return [m.group(1) for m in _CODE_SPAN.finditer(clause) if m.start() >= start]
+
+
+def _is_enforceable_token(token: str) -> bool:
+    """Reject spans that cannot be a meaningful literal.
+
+    A token carrying leading or trailing whitespace is a prose fragment, not an
+    identifier. Enforcing one would fail any diff containing the word "to".
+    """
+    if not token or token != token.strip():
+        return False
+    if len(token) > 60:
+        return False
+    if re.search(r"[A-Za-z0-9]", token):
+        return True
+    # Deliberate single-character literals are real: skills ban `•` and `#`.
+    return len(token) == 1
+
+
 def extract_contract(record: Optional[SourceRecord], body: str, skill_name: str) -> Contract:
     obligations = []
     lines = body.splitlines()
@@ -260,11 +295,14 @@ def extract_contract(record: Optional[SourceRecord], body: str, skill_name: str)
         for clause in clauses:
             cl_lower = clause.lower()
             prohib_match = re.search(r"\b(never|do not|don't|must not|prohibit)\b", cl_lower)
-            req_match = re.search(r"\b(always|must use|require)\b", cl_lower)
+            # Bare `require` is not a directive keyword: it is the most common
+            # function name in JavaScript, and `require('x')` in an example read
+            # as "this skill requires x".
+            req_match = re.search(r"\b(always|must use|must include|required to)\b", cl_lower)
 
             if prohib_match:
-                after_text = clause[prohib_match.start():]
-                tokens = re.findall(r"`([^`]+)`", after_text)
+                tokens = [t for t in _code_spans_after(clause, prohib_match.start())
+                          if _is_enforceable_token(t)]
                 if tokens:
                     for tok in tokens:
                         idx += 1
@@ -282,8 +320,8 @@ def extract_contract(record: Optional[SourceRecord], body: str, skill_name: str)
                         directive=s,
                     ))
             elif req_match:
-                after_text = clause[req_match.start():]
-                tokens = re.findall(r"`([^`]+)`", after_text)
+                tokens = [t for t in _code_spans_after(clause, req_match.start())
+                          if _is_enforceable_token(t)]
                 if tokens:
                     for tok in tokens:
                         idx += 1

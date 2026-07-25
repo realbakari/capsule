@@ -1128,6 +1128,44 @@ def test_backticked_single_characters_are_kept():
     assert "#" in banned
 
 
+def test_javascript_require_is_not_a_directive_keyword():
+    """Regression: `require('x')` in an example read as "this skill requires x".
+
+    Bare `require` is the most common function name in JavaScript. Combined
+    with the slicing bug below it produced eleven obligations from one line of
+    example code, and reported 100% coverage over all of them.
+    """
+    body = "Lifecycle: declare `@input m: InternetModule` (or `require('LensStudio:InternetModule')`).\n"
+    contract = extract_contract(None, body, "demo")
+    assert contract.obligations == []
+
+
+def test_code_spans_are_paired_over_the_whole_clause():
+    """Regression: slicing at the keyword re-paired the backticks.
+
+    Slicing from the keyword opens on the *closing* backtick of an earlier
+    span, so the text captured as "code" is the prose between spans -- ` to `,
+    `/`, `), bind `. A diff containing the word "to" then failed the contract.
+    """
+    body = "Always use `ShadingType.CLEAR` to set `shading` in the cell.\n"
+    tokens = {o.token for o in extract_contract(None, body, "demo").checkable}
+    assert tokens == {"ShadingType.CLEAR", "shading"}
+    assert not any(t != t.strip() for t in tokens)
+
+
+def test_whitespace_padded_spans_are_never_enforceable():
+    body = "Always use `foo` and ` to ` and `), bind `.\n"
+    tokens = {o.token for o in extract_contract(None, body, "demo").checkable}
+    assert tokens == {"foo"}
+
+
+def test_deliberate_single_character_literals_survive():
+    """`•` and `#` are real bans and must not be filtered as punctuation."""
+    body = "- **Lists:** never insert `•` literally.\n- **Hex colors: never `#`.**\n"
+    tokens = {o.token for o in extract_contract(None, body, "demo").checkable}
+    assert {"•", "#"} <= tokens
+
+
 def test_directive_without_a_code_token_is_advisory_not_enforced():
     contract = extract_contract(None, "Never be vague. Always write clearly.", "demo")
     assert contract.checkable == []
