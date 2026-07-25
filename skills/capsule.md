@@ -18,6 +18,81 @@ python3 -m pytest tests/ -q
 Every command below is `python3 -m capsule.cli <command>`. Shortened to `capsule`
 here for readability.
 
+## What it puts in your repo
+
+Seven files at most, and you only ever author two of them.
+
+```text
+your-project/
+├── .claude/
+│   ├── settings.json          ← YOURS. Merged, never overwritten.
+│   ├── skills/…/SKILL.md      ← YOURS. The skills you write.
+│   └── capsule/               ← generated. Delete it any time.
+│       ├── hooks.json
+│       ├── capsule-hook.py
+│       └── README.md          ← explains the other two
+├── capsule.toml               ← yours, optional. Absent = defaults.
+└── capsule-index.json         ← derived. Gitignore it.
+```
+
+Three rules govern this, and they exist because the first version broke all
+three:
+
+**Your files are merged, never replaced.** `settings.json` is the project's.
+Capsule unions its deny rules into it and leaves `allow`, `env` and your own
+denials alone; the rules it manages are listed under `_capsule.managed_deny` so
+you can see what it added and re-running never grows the list. An earlier
+version overwrote the file, which deleted a project's `Bash(rm -rf *)` denial
+while installing a security control.
+
+**Everything generated lives in one directory.** `.claude/capsule/` is safe to
+delete wholesale and regenerate. Nothing of Capsule's is scattered elsewhere in
+`.claude/`, so "what did this tool add" has a one-word answer.
+
+**Generated files explain themselves.** `.claude/capsule/README.md` says what
+each file does, what it is enforcing, and the command that recreates it.
+Generated config that the person who finds it cannot explain gets deleted, or
+worse, copied into another repo unchanged.
+
+If you want none of this: `capsule lint`, `doctor`, `route` and `verify` write
+nothing at all. Only `harness` and `reconstruct` create files.
+
+## Daily use
+
+Most days you run two commands, and neither writes to your project.
+
+**While working** — you do not run Capsule. If you installed the prompt router
+(`harness --route-prompts`), it routes each message and injects the brief; if
+you did not, nothing runs.
+
+**Before committing** — one command, as a pre-commit hook:
+
+```bash
+capsule verify --skill <name> --ref=--cached    # exit 5 on violation
+```
+
+**In CI** — the corpus checks, which need no local state:
+
+```bash
+capsule index --out capsule-index.json
+capsule lint  --index capsule-index.json        # collisions, budget, rules
+capsule doctor --index capsule-index.json --severity medium
+```
+
+**When you add or change a skill** — rebuild the index and re-check routing,
+because a new description can quietly steal another skill's triggers:
+
+```bash
+capsule index --out capsule-index.json && capsule lint --index capsule-index.json
+```
+
+**Rarely** — `harness` when a skill's prohibitions change, `reconstruct` when
+you are packaging a skill for distribution, `registry` before installing
+something from skills.sh.
+
+That is the whole workflow. Everything else in this document is for when one of
+those five reports something you want to understand.
+
 ## The shape of a session
 
 ```bash

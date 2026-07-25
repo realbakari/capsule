@@ -1536,9 +1536,10 @@ import json  # noqa: E402
 import subprocess as _sp  # noqa: E402
 
 from capsule.harness import (  # noqa: E402
-    FETCH_DISABLED, FETCH_INDEXED, FETCH_LIVE, classify_input_provenance,
-    emit_all, hook_config, hook_script, is_command_token, managed_agent_policy,
-    permission_rules, plugin_manifest, split_obligations,
+    FETCH_DISABLED, FETCH_INDEXED, FETCH_LIVE, GENERATED_PREFIX,
+    classify_input_provenance, emit_all, hook_config, hook_script,
+    is_command_token, managed_agent_policy, merge_settings, permission_rules,
+    plugin_manifest, split_obligations,
 )
 
 _HARNESS_BODY = (
@@ -1567,6 +1568,55 @@ def test_prohibitions_split_by_enforcement_point():
     commands, contents = split_obligations(_harness_contract())
     assert {o.token for o in commands} == {"npm install"}
     assert {o.token for o in contents} == {"SOLID", "•"}
+
+
+def test_merge_preserves_everything_the_user_owns():
+    """Regression, and the worst bug found in this codebase.
+
+    `harness --dest ./.claude` overwrote the project's settings.json. A project
+    with its own allow rules, env, and a `Bash(rm -rf *)` denial lost all three
+    — so installing a security control silently removed one.
+    """
+    theirs = {
+        "permissions": {
+            "allow": ["Bash(npm test)", "Read(src/**)"],
+            "deny": ["Bash(rm -rf *)"],
+        },
+        "env": {"MY_PROJECT_FLAG": "1"},
+    }
+    merged = merge_settings(theirs, permission_rules(_harness_contract()))
+
+    assert merged["env"] == {"MY_PROJECT_FLAG": "1"}
+    assert merged["permissions"]["allow"] == ["Bash(npm test)", "Read(src/**)"]
+    assert "Bash(rm -rf *)" in merged["permissions"]["deny"]
+    assert "Bash(npm install *)" in merged["permissions"]["deny"]
+
+
+def test_merge_is_idempotent():
+    """Re-running must not grow the deny list every time."""
+    generated = permission_rules(_harness_contract())
+    once = merge_settings({}, generated)
+    twice = merge_settings(once, generated)
+    assert once["permissions"]["deny"] == twice["permissions"]["deny"]
+
+
+def test_merge_records_which_rules_it_manages():
+    merged = merge_settings(
+        {"permissions": {"deny": ["Bash(rm -rf *)"]}},
+        permission_rules(_harness_contract()),
+    )
+    assert merged["_capsule"]["managed_deny"] == ["Bash(npm install *)"]
+    assert "Bash(rm -rf *)" not in merged["_capsule"]["managed_deny"]
+
+
+def test_merge_never_introduces_an_allow():
+    merged = merge_settings({}, permission_rules(_harness_contract()))
+    assert "allow" not in merged["permissions"]
+
+
+def test_merge_tolerates_a_malformed_permissions_block():
+    merged = merge_settings({"permissions": "nonsense"}, permission_rules(_harness_contract()))
+    assert merged["permissions"]["deny"] == ["Bash(npm install *)"]
 
 
 def test_permission_rules_only_deny():
@@ -1640,12 +1690,28 @@ def test_plugin_manifest_declares_no_skills_field():
     assert manifest["hooks"] == "./hooks/hooks.json"
 
 
-def test_emit_all_produces_the_expected_artifacts():
+def test_emit_all_keeps_generated_files_in_one_directory():
+    """Footprint: everything Capsule owns is under `capsule/`.
+
+    The one file outside it is `settings.json`, which belongs to the project
+    and is merged rather than written. Scattering generated files through
+    `.claude/` made it impossible to tell what was safe to delete.
+    """
     paths = {e.path for e in emit_all(_harness_contract(), ".")}
     assert paths == {
-        "settings.json", "hooks/hooks.json", "capsule-hook.py",
-        ".claude-plugin/plugin.json",
+        "settings.json", "capsule/hooks.json", "capsule/capsule-hook.py",
+        "capsule/README.md",
     }
+    generated = {p for p in paths if p != "settings.json"}
+    assert all(p.startswith(GENERATED_PREFIX) for p in generated)
+
+
+def test_generated_files_carry_an_explanation():
+    """Generated config nobody can explain gets deleted or cargo-culted."""
+    readme = next(e for e in emit_all(_harness_contract(), ".")
+                  if e.path == "capsule/README.md").content
+    assert "safe to delete" in readme
+    assert "capsule harness" in readme
 
 
 # -- the generated hook actually behaves --------------------------------------
@@ -2382,8 +2448,9 @@ def _run_router(tmp_path: Path, index: Path, payload: str):
 def test_router_hook_is_opt_in():
     """A hook that runs on every prompt must be asked for explicitly."""
     contract = _harness_contract()
-    assert "capsule-router.py" not in {e.path for e in emit_all(contract, ".")}
-    assert "capsule-router.py" in {e.path for e in emit_all(contract, ".", index_path="/x.json")}
+    assert "capsule/capsule-router.py" not in {e.path for e in emit_all(contract, ".")}
+    assert "capsule/capsule-router.py" in {
+        e.path for e in emit_all(contract, ".", index_path="/x.json")}
 
 
 def test_router_hook_registers_a_user_prompt_submit_event():

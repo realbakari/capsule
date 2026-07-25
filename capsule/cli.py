@@ -25,8 +25,8 @@ from .contract import Changeset, brief, contract_for_skill, verify
 from .doctor import audit_context
 from .evals import load_evals, run_eval
 from .harness import (
-    ArtifactEntry, SkillMeta, classify_input_provenance,
-    emit_all, emit_all_plugins, split_obligations,
+    ArtifactEntry, GENERATED_PREFIX, SkillMeta, classify_input_provenance,
+    emit_all, emit_all_plugins, merge_settings, split_obligations,
 )
 from .discover import discover
 from .health import analyze, description_quality, summarize, tool_grant_risk
@@ -112,6 +112,17 @@ def cmd_index(args: argparse.Namespace) -> int:
         )
         return 1
     print(f"  skills: {len(skills)}  reconstructable: {len(ok)}  gated: {len(skills) - len(ok)}")
+
+    # The index is derived from files already in the repo, so committing it
+    # adds a large artifact that goes stale and conflicts on every branch.
+    out = Path(args.out)
+    if out.parent.resolve() == Path.cwd().resolve():
+        ignore = Path(".gitignore")
+        listed = ignore.exists() and out.name in ignore.read_text()
+        if Path(".git").exists() and not listed:
+            print(
+                dim(f"  note: {out.name} is derived; add it to .gitignore")
+            )
 
     # Category grouping.
     if getattr(args, "by_category", False):
@@ -598,6 +609,26 @@ def cmd_harness(args: argparse.Namespace) -> int:
     for emission in emissions:
         target = dest / emission.path
         target.parent.mkdir(parents=True, exist_ok=True)
+
+        # Files under capsule/ are ours to replace. Anything else already
+        # belongs to the project, so merge rather than overwrite -- clobbering
+        # settings.json silently deleted the user's own deny rules.
+        if not emission.path.startswith(GENERATED_PREFIX) and target.exists():
+            try:
+                existing = json.loads(target.read_text())
+            except (OSError, json.JSONDecodeError):
+                print(
+                    f"refusing to overwrite unreadable {target}; "
+                    "merge the rules by hand",
+                    file=sys.stderr,
+                )
+                continue
+            merged = merge_settings(existing, json.loads(emission.content))
+            target.write_text(json.dumps(merged, indent=2) + "\n")
+            kept = len(merged.get("permissions", {}).get("deny", []))
+            print(f"merged into {green(str(target))}  ({kept} deny rule(s) total)")
+            continue
+
         target.write_text(emission.content)
         if target.suffix == ".py":
             target.chmod(0o755)

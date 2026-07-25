@@ -27,7 +27,8 @@ from .taxonomy import Taxonomy, derive_domains, mentions
 from .harness import (
     ArtifactEntry, Provenance, SkillMeta, classify_input_provenance, emit_all,
     emit_all_plugins, hook_config, hook_script, is_command_token,
-    managed_agent_policy, permission_rules, plugin_manifest, prompt_router_hook,
+    GENERATED_PREFIX, managed_agent_policy, merge_settings,
+    permission_rules, plugin_manifest, prompt_router_hook,
     split_obligations,
 )
 from .contract import (
