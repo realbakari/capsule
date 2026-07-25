@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from .schema import SourceRecord
+from .schema import TOOLS_INHERIT_ALL, SourceRecord
 
 SEVERITIES = ("high", "medium", "low", "info")
 _SEVERITY_RANK = {s: i for i, s in enumerate(SEVERITIES)}
@@ -358,6 +358,48 @@ def description_quality(description: str) -> list[HealthFinding]:
         ))
 
     return findings
+
+
+# -- agent tool grants --------------------------------------------------------
+
+# Tools that read or write outside the working tree, or execute code. An agent
+# holding these has real reach; one holding only Read and Grep does not.
+_HIGH_REACH_TOOLS = {
+    "bash", "write", "edit", "notebookedit", "webfetch", "websearch",
+    "killshell", "bashoutput",
+}
+
+
+def tool_grant_risk(name: str, tool_grants: Sequence[str]) -> list[HealthFinding]:
+    """Assess an agent definition's permission grant against least privilege.
+
+    The failure this catches is omission, not excess. An agent definition that
+    names no `tools:` inherits the host's entire tool set, and the omission
+    reads as an unremarkable blank line rather than as a grant -- which is why
+    it is the most common over-permissioning defect in practice.
+    """
+    grants = list(tool_grants)
+    if not grants:
+        return []
+
+    if grants == [TOOLS_INHERIT_ALL]:
+        return [HealthFinding(
+            "agent-inherits-all-tools", "medium",
+            f"{name} names no tools and therefore inherits every tool the host "
+            "allows, including write and execute; declare the tools it needs",
+            "no tools: key",
+        )]
+
+    high = sorted({t for t in grants if t.strip().lower() in _HIGH_REACH_TOOLS})
+    if high:
+        return [HealthFinding(
+            "agent-high-reach-tools", "info",
+            f"{name} grants {len(grants)} tool(s) including "
+            f"{', '.join(high)}; confirm each is needed",
+            ", ".join(high),
+        )]
+
+    return []
 
 
 def example_density(body: str) -> list[HealthFinding]:

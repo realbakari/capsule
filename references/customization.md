@@ -111,9 +111,13 @@ whether or not it changed the outcome.
 
 ## Diagnostics: `capsule lint`
 
-Runs four things no per-skill validator can:
+Runs five things no per-skill validator can:
 
 - **Rule + trifecta scan** over every skill body and its scripts.
+- **Agent tool grants** — least privilege over `agents/*.md`. The defect this
+  finds is omission: a definition that names no `tools:` inherits every tool the
+  host allows, and the omission looks like a blank line rather than a grant. In
+  the installed marketplace corpus that is 12 of 24 agents.
 - **Description quality** — per skill, the two defects that stop a skill firing:
   a description written in first or second person (the text is injected into a
   system prompt, and mixed point-of-view degrades discovery), and a description

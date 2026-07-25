@@ -22,7 +22,7 @@ from pathlib import Path
 import yaml
 
 from .policy import Policy
-from .schema import LIFECYCLES, RunContext, SourceRecord
+from .schema import LIFECYCLES, TOOLS_INHERIT_ALL, RunContext, SourceRecord
 
 ROOT_INSTRUCTION_NAMES = (
     "CLAUDE.md",
@@ -253,6 +253,78 @@ def discover_skill(skill_dir: Path, policy: Policy, scope: str) -> SourceRecord 
     return record
 
 
+def _parse_tools(raw) -> list[str]:
+    """Normalise a `tools:` value.
+
+    Both spellings occur in the wild and mean the same thing:
+        tools: ["Read", "Grep"]
+        tools: Glob, Grep, LS, Read
+    """
+    if raw is None:
+        return [TOOLS_INHERIT_ALL]
+    if isinstance(raw, str):
+        parsed = [t.strip() for t in raw.split(",") if t.strip()]
+    elif isinstance(raw, (list, tuple)):
+        parsed = [str(t).strip() for t in raw if str(t).strip()]
+    else:
+        return [TOOLS_INHERIT_ALL]
+    return parsed or [TOOLS_INHERIT_ALL]
+
+
+def discover_agent(path: Path, scope: str) -> SourceRecord | None:
+    """Condense one agent definition.
+
+    Agents are a governed surface in their own right: they carry a description
+    that decides when they fire, and a `tools:` list that is an explicit
+    permission grant. A file under `agents/` with no parsable frontmatter is
+    not an agent definition at all, so it is skipped rather than recorded as a
+    zero-permission agent -- which would read as the safest entry in the index.
+    """
+    try:
+        body = path.read_text(errors="replace")
+    except OSError:
+        return None
+
+    front = parse_frontmatter(body)
+    if not front or not front.get("name"):
+        return None
+
+    name = str(front["name"]).strip()
+    description = str(front.get("description") or "").strip()
+    tools = _parse_tools(front.get("tools"))
+
+    constraints = ["source-type:agent"]
+    constraints.append(
+        "tools:inherits-all" if tools == [TOOLS_INHERIT_ALL] else f"tools:scoped({len(tools)})"
+    )
+
+    confidence = 0.6 + (0.2 if description else 0.0) + (0.2 if front.get("tools") else 0.0)
+
+    return SourceRecord(
+        source_type="agent",
+        source_path=str(path.resolve()),
+        name=name,
+        category="agent-definition",
+        # An agent body is a system prompt, not documentation, so its first
+        # line is "You are a code reviewer..." rather than a summary. The
+        # frontmatter description is the meaningful one, and it is also the
+        # text that decides when the agent gets delegated to.
+        purpose=description or _purpose(body, description),
+        trigger_phrases=_trigger_phrases(description, name),
+        shortcuts=[],
+        scope=scope,
+        policy_constraints=constraints,
+        reload_rules="on-selection: read the definition in full before delegating",
+        confidence=round(min(confidence, 1.0), 2),
+        license_class=Policy.classify_license(path.parent),
+        reconstructable=False,
+        body_words=len(body.split()),
+        content_hash=_hash(body),
+        tool_grants=tools,
+        model=str(front.get("model") or ""),
+    )
+
+
 def _simple_record(path: Path, source_type: str, category: str, scope: str) -> SourceRecord:
     try:
         text = path.read_text(errors="replace")
@@ -315,6 +387,13 @@ def discover(roots: list[str], policy: Policy, max_depth: int = 6) -> RunContext
                     continue
                 seen_skills.add(str(skill_dir))
                 record = discover_skill(skill_dir, policy, scope)
+                if record:
+                    context.records.append(record)
+                continue
+
+            # agent definitions: any .md directly under an `agents/` directory
+            if path.suffix.lower() == ".md" and path.parent.name == "agents":
+                record = discover_agent(path, scope)
                 if record:
                     context.records.append(record)
                 continue

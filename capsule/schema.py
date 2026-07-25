@@ -19,6 +19,7 @@ LICENSE_UNKNOWN = "unknown"
 
 SOURCE_TYPES = {
     "skill",
+    "agent",
     "instruction",
     "doc",
     "manifest",
@@ -26,6 +27,11 @@ SOURCE_TYPES = {
     "tooling",
     "registry",
 }
+
+# An agent definition that names no tools inherits the host's full tool set.
+# Recorded explicitly rather than as an empty list, because "granted everything"
+# and "granted nothing" are opposite facts and must not share a representation.
+TOOLS_INHERIT_ALL = "*"
 
 # Maturity, declared in frontmatter or inferred from directory layout. Kept to
 # three values on purpose: a taxonomy an author has to look up is one they will
@@ -57,6 +63,13 @@ class SourceRecord:
     aux_dirs: list[str] = field(default_factory=list)
     content_hash: str = ""
     lifecycle: str = "stable"
+
+    # Tools an agent definition grants. `[TOOLS_INHERIT_ALL]` means the
+    # definition named none and therefore inherits everything the host allows.
+    # Empty means "not applicable" -- skills carry their grants in frontmatter
+    # the host reads directly.
+    tool_grants: list[str] = field(default_factory=list)
+    model: str = ""
 
     # Registry provenance and trust. Populated for source_type "registry"; left
     # empty for local sources, which are governed by the license gate instead.

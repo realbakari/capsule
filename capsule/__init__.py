@@ -2,9 +2,9 @@
 
 __version__ = "0.1.0"
 
-from .schema import RunContext, SourceRecord
+from .schema import RunContext, SourceRecord, TOOLS_INHERIT_ALL
 from .policy import Policy, PolicyError, Decision
-from .discover import discover, parse_frontmatter
+from .discover import discover, discover_agent, parse_frontmatter
 from .router import route, classify, Routing
 from .reconstruct import reconstruct, package, Reconstruction
 from .validate import validate_pack
@@ -13,7 +13,8 @@ from .trust import aggregate, aggregate_api, ProviderAudit, TrustVerdict
 from .rules import Rule, RuleSet, RuleHit, default_ruleset
 from .config import CapsuleConfig, Precedence, description_budget, trigger_overlap, lethal_trifecta
 from .health import (
-    analyze, description_quality, summarize, HealthReport, HealthFinding, Finding,
+    analyze, description_quality, summarize, tool_grant_risk,
+    HealthReport, HealthFinding, Finding,
 )
 from .doctor import audit_skill, audit_context, SkillAudit, Diagnostic
 from .evals import (
@@ -32,14 +33,15 @@ from .contract import (
 )
 
 __all__ = [
-    "RunContext", "SourceRecord", "Policy", "PolicyError", "Decision",
-    "discover", "parse_frontmatter", "route", "classify", "Routing",
+    "RunContext", "SourceRecord", "TOOLS_INHERIT_ALL",
+    "Policy", "PolicyError", "Decision",
+    "discover", "discover_agent", "parse_frontmatter", "route", "classify", "Routing",
     "reconstruct", "package", "Reconstruction", "validate_pack",
     "Registry", "HttpTransport", "FixtureTransport", "RegistryError",
     "aggregate", "aggregate_api", "ProviderAudit", "TrustVerdict",
     "Rule", "RuleSet", "RuleHit", "default_ruleset",
     "CapsuleConfig", "Precedence", "description_budget", "trigger_overlap", "lethal_trifecta",
-    "analyze", "description_quality", "summarize",
+    "analyze", "description_quality", "summarize", "tool_grant_risk",
     "HealthReport", "HealthFinding", "Finding",
     "audit_skill", "audit_context", "SkillAudit", "Diagnostic",
     "Assertion", "AssertionResult", "CaseResult", "EvalCase", "EvalReport", "EvalSuite",

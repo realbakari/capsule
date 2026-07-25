@@ -29,7 +29,7 @@ from .harness import (
     emit_all, emit_all_plugins, split_obligations,
 )
 from .discover import discover, parse_frontmatter
-from .health import analyze, description_quality, summarize
+from .health import analyze, description_quality, summarize, tool_grant_risk
 from .registry import FixtureTransport, HttpTransport, Registry, RegistryError
 from .policy import Policy, PolicyError
 from .reconstruct import package, reconstruct
@@ -423,6 +423,20 @@ def cmd_lint(args: argparse.Namespace) -> int:
     if not weak:
         print(f"  {green('every description names both what it does and when to use it')}")
     print()
+
+    agents = context.of_type("agent")
+    if agents:
+        print(bold("== agent definitions =="))
+        wide = 0
+        for record in agents:
+            findings = tool_grant_risk(record.name, record.tool_grants)
+            findings += description_quality(record.purpose)
+            if findings:
+                wide += 1
+                print(f"  {record.name}:")
+                for finding in findings:
+                    print(f"     {finding.line()}")
+        print(f"  {len(agents)} agent(s), {wide} with findings\n")
 
     print(bold("== corpus diagnostics =="))
     budget = description_budget(context, cfg.description_budget)

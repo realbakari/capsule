@@ -7,7 +7,7 @@ both read fields that look decorative.
 
 | Field | Meaning |
 |---|---|
-| `source_type` | `skill` / `instruction` / `doc` / `manifest` / `config` / `tooling` |
+| `source_type` | `skill` / `agent` / `instruction` / `doc` / `manifest` / `config` / `tooling` / `registry` |
 | `source_path` | absolute path or identifier |
 | `name` | frontmatter name, else directory name |
 | `category` | inferred domain bucket |
@@ -21,9 +21,26 @@ both read fields that look decorative.
 
 ## Derived fields
 
-`license_class`, `reconstructable`, `body_words`, `aux_dirs`, `content_hash`.
-These exist so a policy decision can be replayed from the index alone, without
-re-reading the filesystem.
+`license_class`, `reconstructable`, `body_words`, `aux_dirs`, `content_hash`,
+`lifecycle`, `tool_grants`, `model`. These exist so a policy decision can be
+replayed from the index alone, without re-reading the filesystem.
+
+## Agent definitions
+
+Any `.md` directly under an `agents/` directory is indexed as `source_type:
+agent`. Agents are governed for the same reason skills are: a `description`
+decides when the agent gets delegated to, and `tools:` is an explicit
+permission grant.
+
+`tool_grants` accepts both spellings found in the wild — `tools: ["Read",
+"Grep"]` and `tools: Glob, Grep, Read` — and normalises them to a list. A
+definition that names no tools records `["*"]`, not `[]`: omission means the
+agent inherits every tool the host allows, and representing that as an empty
+grant would make the most permissive definition in a corpus read as the least.
+
+A file under `agents/` with no parsable frontmatter is **not** recorded. It is
+not an agent definition, and indexing it as a zero-permission one would put a
+non-entity at the top of any least-privilege report.
 
 ## Confidence scoring
 

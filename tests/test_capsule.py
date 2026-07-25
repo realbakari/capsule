@@ -9,7 +9,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from capsule.discover import discover, parse_frontmatter, _trigger_phrases  # noqa: E402
+from capsule.discover import (  # noqa: E402
+    discover, discover_agent, parse_frontmatter, _trigger_phrases,
+)
 from capsule.policy import Policy, PolicyError  # noqa: E402
 
 
@@ -18,7 +20,7 @@ def _sandbox(tmp_path) -> Policy:
     return Policy(writable_roots=[str(tmp_path)])
 from capsule.reconstruct import reconstruct  # noqa: E402
 from capsule.router import classify, route, _mentions  # noqa: E402
-from capsule.schema import RunContext, SourceRecord  # noqa: E402
+from capsule.schema import RunContext, SourceRecord, TOOLS_INHERIT_ALL  # noqa: E402
 from capsule.validate import validate_pack, validate_references  # noqa: E402
 from capsule.evals import (  # noqa: E402
     Assertion, EvalCase, EvalSuite, EvalReport,
@@ -888,6 +890,7 @@ def test_precedence_does_not_fire_outside_its_trigger():
 from capsule.health import (  # noqa: E402
     analyze, classifier_domain_risk, conflicting_directives, description_quality,
     example_density, progressive_disclosure, reasoning_extraction_risk, summarize,
+    tool_grant_risk,
 )
 
 
@@ -2007,6 +2010,90 @@ def test_capsule_own_description_is_well_formed():
     front = parse_frontmatter(body)
     findings = description_quality(str(front.get("description") or ""))
     assert not [f for f in findings if f.severity in ("high", "medium")], findings
+
+
+# -- agent definitions --------------------------------------------------------
+
+def _write_agent(tmp_path: Path, name: str, frontmatter: str, body: str = "You are an agent.") -> Path:
+    agents = tmp_path / "agents"
+    agents.mkdir(exist_ok=True)
+    path = agents / f"{name}.md"
+    path.write_text(f"---\n{frontmatter}\n---\n\n{body}\n")
+    return path
+
+
+def test_agent_tools_accept_a_yaml_list(tmp_path):
+    path = _write_agent(tmp_path, "a", 'name: a\ndescription: Does a thing. Use when asked.\ntools: ["Read", "Grep"]')
+    record = discover_agent(path, "repo")
+    assert record.tool_grants == ["Read", "Grep"]
+
+
+def test_agent_tools_accept_a_comma_string(tmp_path):
+    """Both spellings occur in the marketplace and mean the same thing."""
+    path = _write_agent(tmp_path, "b", "name: b\ndescription: Does a thing. Use when asked.\ntools: Glob, Grep, Read")
+    record = discover_agent(path, "repo")
+    assert record.tool_grants == ["Glob", "Grep", "Read"]
+
+
+def test_agent_without_tools_key_inherits_everything(tmp_path):
+    """Omission is a grant, and must not be recorded as an empty one."""
+    path = _write_agent(tmp_path, "c", "name: c\ndescription: Does a thing. Use when asked.")
+    record = discover_agent(path, "repo")
+    assert record.tool_grants == [TOOLS_INHERIT_ALL]
+    assert "tools:inherits-all" in record.policy_constraints
+
+
+def test_file_under_agents_without_frontmatter_is_not_an_agent(tmp_path):
+    """Three such files ship in the marketplace.
+
+    Recording one as a zero-permission agent would make it read as the safest
+    entry in the index, when in fact it is not an agent definition at all.
+    """
+    agents = tmp_path / "agents"
+    agents.mkdir()
+    path = agents / "notes.md"
+    path.write_text("# Notes\n\nJust prose, no frontmatter.\n")
+    assert discover_agent(path, "repo") is None
+
+
+def test_agent_purpose_is_the_description_not_the_prompt(tmp_path):
+    """An agent body is a system prompt; its first line is not a summary."""
+    path = _write_agent(
+        tmp_path, "d",
+        "name: d\ndescription: Reviews code. Use when the user asks for review.",
+        body="You are a meticulous reviewer.",
+    )
+    record = discover_agent(path, "repo")
+    assert record.purpose.startswith("Reviews code")
+
+
+def test_discover_finds_agent_definitions(tmp_path):
+    _write_agent(tmp_path, "e", "name: e\ndescription: Does a thing. Use when asked.\nmodel: sonnet")
+    ctx = discover([str(tmp_path)], Policy())
+    agents = ctx.of_type("agent")
+    assert len(agents) == 1
+    assert agents[0].name == "e"
+    assert agents[0].model == "sonnet"
+
+
+def test_inheriting_all_tools_is_a_medium_finding():
+    findings = tool_grant_risk("x", [TOOLS_INHERIT_ALL])
+    assert findings and findings[0].severity == "medium"
+    assert findings[0].check == "agent-inherits-all-tools"
+
+
+def test_high_reach_tools_are_reported_as_info():
+    findings = tool_grant_risk("x", ["Read", "Grep", "Bash", "Write"])
+    assert findings and findings[0].severity == "info"
+    assert "Bash" in findings[0].evidence
+
+
+def test_read_only_grant_is_clean():
+    assert tool_grant_risk("x", ["Read", "Grep", "Glob"]) == []
+
+
+def test_non_agent_records_are_not_assessed_for_tool_grants():
+    assert tool_grant_risk("x", []) == []
 
 
 # -- color & formatting -------------------------------------------------------

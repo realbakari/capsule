@@ -67,6 +67,25 @@ is injected into a system prompt) and descriptions that say what a skill does bu
 never when to use it. Across the 22-skill marketplace corpus that finds two
 skills with no trigger clause at all.
 
+## Agents are a governed surface too
+
+Capsule indexes any `.md` under an `agents/` directory. An agent definition has
+the same triggering problem a skill does, plus an explicit permission grant:
+
+```
+code-architect:
+  [info]   agent-high-reach-tools: grants 10 tool(s) including BashOutput, WebFetch
+code-simplifier:
+  [medium] agent-inherits-all-tools: names no tools and therefore inherits every
+           tool the host allows, including write and execute
+```
+
+The defect worth naming is the second one, and it is an omission rather than an
+excess: a definition with no `tools:` key inherits everything, and the omission
+reads as a blank line rather than as a grant. In the installed marketplace
+corpus that is **12 of 24 agents**. This is the same "declared but never
+derived" gap `references/limitations.md` #9 records for skills, one layer over.
+
 ## Adherence: when the agent ignores the skill
 
 The failure that survives good routing. The pack is selected, loaded — and the diff
