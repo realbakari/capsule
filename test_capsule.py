@@ -28,6 +28,11 @@ from capsule.harness import (  # noqa: E402
     SkillMeta, claude_plugin_manifest, codex_plugin_manifest,
     cursor_plugin_manifest, grok_plugin_manifest, emit_all_plugins,
 )
+from capsule.color import green, red, yellow, cyan, bold, dim  # noqa: E402
+from capsule.schema_export import (  # noqa: E402
+    skill_frontmatter_schema, evals_schema, run_context_schema, export_schemas,
+)
+from capsule.doctor import audit_skill, audit_context  # noqa: E402
 
 SKILL_ROOTS = ["/mnt/skills/public", "/mnt/skills/examples"]
 MOUNTS_PRESENT = all(Path(r).exists() for r in SKILL_ROOTS)
@@ -1793,3 +1798,82 @@ def test_validate_pack_accepts_lifecycle_frontmatter(tmp_path):
     )
     ok, problems = validate_pack(skill_dir)
     assert ok, f"unexpected problems: {problems}"
+
+
+# -- color & formatting -------------------------------------------------------
+
+def test_color_functions_return_strings():
+    assert isinstance(green("text"), str)
+    assert isinstance(red("text"), str)
+    assert isinstance(yellow("text"), str)
+    assert isinstance(cyan("text"), str)
+    assert isinstance(bold("text"), str)
+    assert isinstance(dim("text"), str)
+
+
+# -- schema export ------------------------------------------------------------
+
+def test_schema_export_structures():
+    fm_s = skill_frontmatter_schema()
+    assert fm_s["title"] == "CapsuleSkillFrontmatter"
+    assert "name" in fm_s["properties"]
+
+    ev_s = evals_schema()
+    assert ev_s["title"] == "CapsuleEvalSuite"
+
+    rc_s = run_context_schema()
+    assert rc_s["title"] == "CapsuleRunContext"
+
+
+def test_export_schemas_creates_files(tmp_path):
+    paths = export_schemas(tmp_path)
+    assert "skill-frontmatter.schema.json" in paths
+    assert "evals.schema.json" in paths
+    assert "capsule-index.schema.json" in paths
+    assert (tmp_path / "skill-frontmatter.schema.json").exists()
+
+
+# -- doctor calibration -------------------------------------------------------
+
+def test_audit_skill_normal(tmp_path):
+    skill_dir = tmp_path / "simple"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("---\nname: simple\n---\n# Simple skill\nUse this skill for basic tasks.\n")
+
+    audit = audit_skill(skill_dir, "simple")
+    assert audit.name == "simple"
+    assert audit.altitude == "optimal"
+    assert audit.word_count > 0
+
+
+def test_audit_skill_detects_brittle_prescription(tmp_path):
+    skill_dir = tmp_path / "strict"
+    skill_dir.mkdir()
+    # High density of MUST / ALWAYS / NEVER
+    content = "---\nname: strict\n---\n" + ("MUST ALWAYS NEVER REQUIRED MANDATORY FORBIDDEN. " * 30)
+    (skill_dir / "SKILL.md").write_text(content)
+
+    audit = audit_skill(skill_dir, "strict")
+    assert audit.altitude == "brittle"
+    assert any("prescriptive-altitude" in d.kind for d in audit.diagnostics)
+
+
+def test_audit_skill_ignores_security_invariants(tmp_path):
+    skill_dir = tmp_path / "sec"
+    skill_dir.mkdir()
+    # Security lines should not trigger prescription penalty
+    content = "---\nname: sec\n---\nNever allow unauthorized license redistribution. Always verify key auth sandbox permissions.\n"
+    (skill_dir / "SKILL.md").write_text(content)
+
+    audit = audit_skill(skill_dir, "sec")
+    # Should not trigger high prescriptive ratio penalty
+    assert not any("prescriptive-altitude" in d.kind for d in audit.diagnostics)
+
+
+def test_pre_commit_hooks_file_exists():
+    hooks_file = Path(__file__).resolve().parents[0] / ".pre-commit-hooks.yaml"
+    assert hooks_file.exists()
+    content = hooks_file.read_text()
+    assert "capsule-validate" in content
+    assert "capsule-doctor" in content
+

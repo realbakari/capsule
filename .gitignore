@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 capsule-index.json
 packs/
+schemas/
+tmp_plugins/

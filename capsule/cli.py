@@ -8,6 +8,8 @@
     capsule audit        --index index.json
     capsule eval         --evals ./skill-evals --output agent-output.txt
     capsule emit-plugins --repo owner/repo --out .
+    capsule schema       --out ./schemas
+    capsule doctor       --index index.json
 """
 
 from __future__ import annotations
@@ -17,8 +19,10 @@ import json
 import sys
 from pathlib import Path
 
+from .color import bold, cyan, dim, fail_badge, green, pass_badge, red, warn_badge, yellow
 from .config import CapsuleConfig, description_budget, lethal_trifecta, trigger_overlap
 from .contract import Changeset, brief, contract_for_skill, verify
+from .doctor import SkillAudit, audit_context, audit_skill
 from .evals import EvalSuite, load_evals, run_eval
 from .harness import (
     ArtifactEntry, SkillMeta, classify_input_provenance,
@@ -31,6 +35,7 @@ from .policy import Policy, PolicyError
 from .reconstruct import package, reconstruct
 from .router import route
 from .schema import RunContext
+from .schema_export import export_schemas
 from .validate import validate_pack
 
 DEFAULT_ROOTS = ["/mnt/skills/public", "/mnt/skills/examples", "/mnt/user-data/uploads"]
@@ -77,7 +82,7 @@ def cmd_index(args: argparse.Namespace) -> int:
 
     skills = context.of_type("skill")
     ok = [r for r in skills if r.reconstructable]
-    print(f"indexed {len(context.records)} sources from {len(roots)} root(s) -> {args.out}")
+    print(bold(f"indexed {len(context.records)} sources from {len(roots)} root(s) -> {args.out}"))
     print(f"  skills: {len(skills)}  reconstructable: {len(ok)}  gated: {len(skills) - len(ok)}")
 
     # Category grouping.
@@ -85,9 +90,9 @@ def cmd_index(args: argparse.Namespace) -> int:
         categories = sorted({r.category for r in skills})
         for cat in categories:
             cat_skills = context.of_category(cat)
-            print(f"\n  [{cat}]")
+            print(f"\n  {bold(cyan('[' + cat + ']'))}")
             for r in sorted(cat_skills, key=lambda x: x.name):
-                lifecycle_tag = f" ({r.lifecycle})" if r.lifecycle != "stable" else ""
+                lifecycle_tag = dim(f" ({r.lifecycle})") if r.lifecycle != "stable" else ""
                 print(f"    {r.name}{lifecycle_tag}")
     else:
         for source_type in sorted({r.source_type for r in context.records}):
@@ -133,19 +138,13 @@ def cmd_eval(args: argparse.Namespace) -> int:
     evals_path = Path(args.evals)
     output_path = Path(args.output) if args.output else None
 
-    # Load eval suites.
     suites = load_evals(evals_path)
     if not suites:
         print(f"no eval suites found in {evals_path}")
         return 1
 
-    # Load output text.
-    if output_path and output_path.exists():
-        output_text = output_path.read_text()
-    else:
-        output_text = ""
+    output_text = output_path.read_text() if output_path and output_path.exists() else ""
 
-    # Run evaluations.
     all_passed = True
     for suite in suites:
         result = run_eval(suite, output_text)
@@ -162,7 +161,6 @@ def cmd_emit_plugins(args: argparse.Namespace) -> int:
     repo_slug = args.repo
     output_dir = Path(args.out)
 
-    # Build skill metadata from index or from skills/ directory.
     index_path = getattr(args, "index", None)
     if index_path and Path(index_path).exists():
         context = _load(index_path)
@@ -176,7 +174,6 @@ def cmd_emit_plugins(args: argparse.Namespace) -> int:
             for r in context.of_type("skill")
         ]
     else:
-        # Discover from current directory.
         context = discover([str(output_dir)], Policy())
         skills = [
             SkillMeta(
@@ -194,14 +191,45 @@ def cmd_emit_plugins(args: argparse.Namespace) -> int:
 
     entries = emit_all_plugins(skills, repo_slug, output_dir)
 
-    # Write the files.
     for entry in entries:
         dest_path = output_dir / entry.path
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         dest_path.write_text(entry.content)
         print(f"  wrote {entry.path}")
 
-    print(f"\ngenerated {len(entries)} plugin manifest files for {repo_slug}")
+    print(bold(green(f"\ngenerated {len(entries)} plugin manifest files for {repo_slug}")))
+    return 0
+
+
+def cmd_schema(args: argparse.Namespace) -> int:
+    """Export JSON Schemas."""
+    out_dir = Path(args.out)
+    paths = export_schemas(out_dir)
+    print(bold("exported JSON Schemas:"))
+    for filename, filepath in paths.items():
+        print(f"  {green(filename)} -> {filepath}")
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Model calibration doctor."""
+    index_path = getattr(args, "index", None)
+    if index_path and Path(index_path).exists():
+        context = _load(index_path)
+        audits = audit_context(context)
+    else:
+        # Audit skills/ in current dir
+        context = discover(["."], Policy())
+        audits = audit_context(context)
+
+    if not audits:
+        print("no skills found for doctor audit")
+        return 0
+
+    print(bold("Capsule Doctor — Model Calibration Audit:"))
+    print("-" * 60)
+    for a in audits:
+        print(a.report())
     return 0
 
 
@@ -232,6 +260,12 @@ def main(argv: list[str] | None = None) -> int:
     p_plugins.add_argument("--out", default=".", help="Output directory")
     p_plugins.add_argument("--index", help="Path to capsule-index.json")
 
+    p_schema = subparsers.add_parser("schema")
+    p_schema.add_argument("--out", default="./schemas", help="Output directory for schema files")
+
+    p_doctor = subparsers.add_parser("doctor")
+    p_doctor.add_argument("--index", help="Path to capsule-index.json")
+
     args = parser.parse_args(argv)
     if args.subcommand == "index":
         return cmd_index(args)
@@ -243,6 +277,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_eval(args)
     elif args.subcommand == "emit-plugins":
         return cmd_emit_plugins(args)
+    elif args.subcommand == "schema":
+        return cmd_schema(args)
+    elif args.subcommand == "doctor":
+        return cmd_doctor(args)
     else:
         parser.print_help()
         return 0
@@ -250,4 +288,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

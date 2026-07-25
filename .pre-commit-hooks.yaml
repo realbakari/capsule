@@ -1,0 +1,15 @@
+- id: capsule-validate
+  name: Capsule Validate Skill Packs
+  description: Validates skill pack SKILL.md frontmatter, kebab-case names, and reference link integrity.
+  entry: python3 -m capsule.cli validate
+  language: python
+  types: [markdown]
+  files: ^skills/
+
+- id: capsule-doctor
+  name: Capsule Skill Doctor Audit
+  description: Audits skill packs for progressive disclosure, prescription altitude, and word budgets.
+  entry: python3 -m capsule.cli doctor
+  language: python
+  types: [markdown]
+  files: ^skills/
