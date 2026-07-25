@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Capsule" width="120" />
+</p>
+
 # Capsule
 
 An agent control plane for governed, replayable execution.
