@@ -75,10 +75,22 @@ def hook_script(contract: Contract) -> str:
     tokens = [ob.token for ob in contents]
     tokens_json = json.dumps(tokens)
 
+    # Inbound prompt injection attack signatures (from Opus 5 System Card Section 5.2)
+    injection_signatures = [
+        "IGNORE PREVIOUS INSTRUCTIONS",
+        "IGNORE ALL PRIOR",
+        "DISREGARD ALL PREVIOUS",
+        "SYSTEM OVERRIDE:",
+        "NEW SYSTEM PROMPT:",
+        "BYPASS SECURITY:",
+    ]
+    injection_json = json.dumps(injection_signatures)
+
     return f"""#!/usr/bin/env python3
-import sys, json
+import sys, json, re
 
 BANNED = {tokens_json}
+INJECTION_SIGNATURES = {injection_json}
 
 def main():
     raw = sys.stdin.read()
@@ -94,14 +106,24 @@ def main():
     tool_input = data.get("tool_input", {{}})
     content = tool_input.get("content") or tool_input.get("new_string") or tool_input.get("file_content")
 
-    if not content:
+    tool_result = data.get("tool_result", {{}})
+    result_text = str(tool_result.get("content") or tool_result.get("output") or data.get("result") or "")
+
+    if not content and not result_text:
         print("no content field recognised", file=sys.stderr)
         sys.exit(0)
 
-    for tok in BANNED:
-        if tok in content:
-            print(f"Contract violation: token {{tok}} is prohibited (this is not a permission problem)", file=sys.stderr)
-            sys.exit(1)
+    if content:
+        for tok in BANNED:
+            if tok and tok in content:
+                print(f"Contract violation: token {{tok}} is prohibited (this is not a permission problem)", file=sys.stderr)
+                sys.exit(1)
+
+    if result_text:
+        for sig in INJECTION_SIGNATURES:
+            if sig in result_text.upper():
+                print(f"Prompt injection detected in tool result: {{sig}}", file=sys.stderr)
+                sys.exit(1)
 
     sys.exit(0)
 

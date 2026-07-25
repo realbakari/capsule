@@ -1870,6 +1870,25 @@ def test_audit_skill_ignores_security_invariants(tmp_path):
     assert not any("prescriptive-altitude" in d.kind for d in audit.diagnostics)
 
 
+def test_audit_skill_detects_unproductive_verification_loops(tmp_path):
+    skill_dir = tmp_path / "looping"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: looping\n---\n# Endless task\nYou must repeat until all pass no matter what.\n"
+    )
+    audit = audit_skill(skill_dir, "looping")
+    assert any("unproductive-verification-loop" in d.kind for d in audit.diagnostics)
+
+
+def test_hook_script_contains_prompt_injection_signatures():
+    from capsule.contract import Contract
+    c = Contract(skill_name="test")
+    script = hook_script(c)
+    assert "INJECTION_SIGNATURES" in script
+    assert "IGNORE PREVIOUS INSTRUCTIONS" in script
+    assert "SYSTEM OVERRIDE" in script
+
+
 def test_pre_commit_hooks_file_exists():
     hooks_file = Path(__file__).resolve().parents[0] / ".pre-commit-hooks.yaml"
     assert hooks_file.exists()

@@ -116,6 +116,19 @@ def audit_skill(skill_dir_path: str | Path, name: str = "") -> SkillAudit:
             f"Prescription ratio {ratio:.2f} is high (>0.4); model may experience instruction friction",
         ))
 
+    # Check for unproductive verification loops (Opus 5 System Card Section 2.2.6 & Section 6.2.1)
+    loop_keywords = [
+        "keep retrying until", "repeat until all pass", "endless verification",
+        "retry until 100%", "continue debugging until all pass", "never stop until",
+    ]
+    content_lower = content.lower()
+    for lkw in loop_keywords:
+        if lkw in content_lower:
+            diagnostics.append(Diagnostic(
+                "medium", "unproductive-verification-loop",
+                f"Skill contains over-verification trigger '{lkw}'; bound turn budgets instead",
+            ))
+
     return SkillAudit(
         name=name,
         word_count=total_words,
