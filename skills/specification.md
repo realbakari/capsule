@@ -218,15 +218,40 @@ per-skill validator can perform the first two by construction.
 
 Write to the spec; know where you're leaving it.
 
-| | Spec | Claude Code | Claude API |
-|---|---|---|---|
-| `name` | Required, matches dir | Optional, defaults to dir | Required |
-| `description` cap | 1,024 (reject) | 1,536 combined (truncate) | 1,024 (reject) |
-| Reserved words | none | — | rejects `anthropic`, `claude` |
-| Distribution | folder | filesystem / plugin | upload via `/v1/skills` |
-| Network at runtime | unspecified | full | **none** |
-| Package install | unspecified | local only | **none** |
-| Extra frontmatter | — | `when_to_use`, `disable-model-invocation`, `user-invocable`, `disallowed-tools`, `paths`, `model`, `effort`, `context: fork`, `hooks`, `arguments` | — |
+| | Spec | Claude Code | Claude API | Managed Agents |
+|---|---|---|---|---|
+| `name` | Required, matches dir | Optional, defaults to dir | Required | Required |
+| `description` cap | 1,024 (reject) | 1,536 combined (truncate) | 1,024 (reject) | 1,024 (reject) |
+| Reserved words | none | — | rejects `anthropic`, `claude` | same as API |
+| Distribution | folder | filesystem / plugin | upload via `/v1/skills` | upload, then attach by `skill_id` |
+| Network at runtime | unspecified | full | **none** | sandbox-defined |
+| Package install | unspecified | local only | **none** | sandbox-defined |
+| **Hard limit** | none | none | **8 skills per request** | **500 per session**, across all agents |
+| Extra frontmatter | — | `when_to_use`, `disable-model-invocation`, `user-invocable`, `disallowed-tools`, `paths`, `model`, `effort`, `context: fork`, `hooks`, `arguments` | — | — |
+
+The two hard limits are the ones that bite in production, and neither is a
+recommendation:
+
+- **The Claude API accepts at most 8 skills per request.** A corpus larger than
+  that has to be routed — you choose which 8 go in, which is exactly the problem
+  `capsule route` solves. Consolidating narrow skills into broader ones is the
+  other documented answer.
+- **Managed Agents allow 500 per session**, counted across every agent in the
+  session, and mounting more increases sandbox start time. Volume is permitted
+  but not free.
+
+Managed Agents attach skills by reference rather than by path, and **version
+pinning is first-class** there in a way it is not on the filesystem:
+
+```json
+"skills": [
+  {"type": "anthropic", "skill_id": "xlsx"},
+  {"type": "custom", "skill_id": "skill_01AbC...", "version": "latest"}
+]
+```
+
+`version` defaults to `latest`. Pin it in production — see
+[Lifecycle](#lifecycle-and-governance).
 
 Unknown frontmatter keys are ignored rather than rejected, so host extensions are
 safe to include in a portable skill. The reverse is not true: a skill that *depends*
@@ -267,7 +292,29 @@ The threat is not only `scripts/`. `SKILL.md` prose is instruction, and the
 `description` sits in the system prompt on every turn — a hostile description is a
 persistent injection that fires before anyone invokes anything.
 
-Audit checklist for any skill you did not write:
+### Risk indicators
+
+The platform's enterprise guidance publishes a risk-tier table. It is worth
+using verbatim, because it names the combinations rather than the individual
+capabilities:
+
+| Indicator | What to look for | Concern |
+|---|---|---|
+| Code execution | `*.py`, `*.sh`, `*.js` in the skill directory | **High** — scripts run with full environment access |
+| Instruction manipulation | Directives to ignore safety rules, hide actions, or change behavior conditionally | **High** — can bypass controls |
+| MCP server references | `ServerName:tool_name` in instructions | **High** — extends access beyond the skill |
+| Network access | URLs, `fetch`, `curl`, `requests` | **High** — exfiltration vector |
+| Hardcoded credentials | Keys or tokens in files or scripts | **High** — exposed in git history *and* the context window |
+| Filesystem scope | Paths outside the skill dir, broad globs, `../` | Medium |
+| Tool invocations | Instructions to use bash or file operations | Medium — review what is performed |
+
+Note the compounding risk called out explicitly: **file-read plus network
+together** is worse than either alone. That is the lethal-trifecta shape, and
+`capsule lint` detects it as a combination rather than as three findings.
+
+### Audit checklist
+
+Checklist for any skill you did not write:
 
 - Read **every** file, not just `SKILL.md`.
 - Flag network egress. A skill that fetches a URL at runtime imports whatever that
@@ -289,3 +336,36 @@ count is not safety evidence, and a pending audit is not a pass. See
 There is no safe-by-default posture available at the skill layer. The host's
 permission rules and hooks are the only mechanisms that bind regardless of what the
 body says — which is what [`capsule harness`](capsule.md#harness) generates.
+
+## Lifecycle and governance
+
+Beyond one skill, the question becomes a supply-chain one. The documented
+lifecycle is **plan → create and review → test → deploy → monitor → iterate or
+deprecate**, with three rules worth lifting out:
+
+- **Separation of duties.** Skill authors should not be their own reviewers.
+- **Pin versions in production.** Treat every update as a new deployment
+  requiring a full security review, and keep the previous version as a rollback.
+- **Verify integrity.** Compute checksums of reviewed skills and verify them at
+  deployment; use signed commits for provenance.
+
+Keep a registry entry per skill: purpose, owner, version, dependencies (MCP
+servers, packages, external services), and last evaluation date.
+
+**Recall degrades with volume.** Each skill's metadata competes for attention in
+the system prompt, so past some corpus size the model starts missing the right
+skill entirely. There is no published number because it depends on your
+descriptions — you measure it. That is what
+[`capsule lint`](capsule.md#lint)'s description-budget and trigger-collision
+diagnostics exist to do.
+
+Start narrow and consolidate later, and only when evaluations confirm the merged
+skill performs as well as the ones it replaces:
+
+```
+start:       formatting-sales-reports, querying-pipeline-data, updating-crm-records
+consolidate: sales-operations   (once evals confirm equivalence)
+```
+
+Skills do **not** sync across surfaces. Keep the source files in git as the
+single source of truth and treat every upload as a deployment of that source.

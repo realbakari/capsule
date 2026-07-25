@@ -64,6 +64,40 @@ does not guarantee the *right* file was read. That is a fuzzy match over your
 description text, and it is wrong often enough that any skill whose misfire is
 expensive should be invoked explicitly rather than automatically.
 
+Anthropic's own guidance calls this **recall degradation** and gives no safe
+number, because it depends on how well your descriptions separate. The only two
+hard limits published are per-surface, not per-corpus:
+
+| Surface | Cap |
+|---|---|
+| Claude API | **8 skills per request** |
+| Managed Agents | **500 per session**, across all agents; more slows sandbox start |
+| Claude Code, claude.ai | none — recall degrades before anything rejects you |
+
+The API cap is the one that forces the issue: past eight skills, something has to
+choose which eight go in. That is routing, whether you do it deliberately or not.
+
+## Governance, and what it maps to
+
+Anthropic's [enterprise guidance](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/enterprise)
+lists the controls an organization needs before deploying skills at scale. Most
+of them are mechanical, and each has a command:
+
+| Control | Command |
+|---|---|
+| Triggering accuracy — fires when it should, stays quiet otherwise | `capsule route` as an assertion |
+| **Coexistence** — a new skill doesn't steal another's triggers | `capsule lint` (trigger collisions) |
+| Recall limits — metadata competing in the system prompt | `capsule lint` (description budget) |
+| Risk-tier review — credentials, network, code execution | `capsule lint` (AST10 rules, lethal trifecta) |
+| Least privilege on agent definitions | `capsule lint` (tool grants) |
+| Integrity verification — checksums of reviewed skills | `content_hash` per record; `capsule audit` |
+| Instruction following | `capsule contract` · `capsule verify` |
+
+Three controls it does **not** cover, stated plainly: output quality needs a
+human or a model judge; separation of duties is a process, not a check; and
+signature verification is [not implemented](references/limitations.md) — Capsule
+records provenance, it does not cryptographically verify it.
+
 ## Where Capsule fits
 
 Skills have no compiler. Nothing checks that your descriptions don't collide, that
@@ -92,7 +126,7 @@ Start with [skills/capsule.md](skills/capsule.md) if you already know the format
 | [Descriptions](skills/descriptions.md) | The highest-leverage 1,024 characters you will write. Triggering, collisions, truncation. |
 | [Authoring](skills/authoring.md) | Conciseness, degrees of freedom, workflows, feedback loops, anti-patterns. |
 | [Scripts](skills/scripts.md) | When to ship code instead of prose, and how to write it so an agent can use it. |
-| [Evaluating](skills/evaluating.md) | Evals, CI gates, and the four things about a skill that are mechanically checkable. |
+| [Evaluating](skills/evaluating.md) | The five evaluation dimensions, CI gates, and which of them are mechanically checkable. |
 | [Capsule](skills/capsule.md) | Every command, what it prints, and when to reach for it. |
 
 ## Getting skills
@@ -117,7 +151,10 @@ report, and install count is not safety evidence. See
 | [Specification](https://agentskills.io/specification) | Normative format definition |
 | [skills-ref](https://github.com/agentskills/agentskills/tree/main/skills-ref) | Official validator — `skills-ref validate ./my-skill` |
 | [Claude Code skills](https://code.claude.com/docs/en/skills) | Host extensions: subagents, hooks, invocation control |
-| [Skills with the Claude API](https://docs.claude.com/en/docs/build-with-claude/skills-guide) | Upload, `skill_id`, container config |
+| [Skills with the Claude API](https://platform.claude.com/docs/en/build-with-claude/skills-guide) | Upload, `skill_id`, container config |
+| [Skills for enterprise](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/enterprise) | Risk tiers, review checklist, lifecycle, recall limits |
+| [Skills in Managed Agents](https://platform.claude.com/docs/en/managed-agents/skills) | Attaching by `skill_id`, version pinning, the 500-per-session cap |
+| [Authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) | Descriptions, progressive disclosure, degrees of freedom |
 | [anthropics/skills](https://github.com/anthropics/skills) | Reference skills and the `spec/` + `template/` directories |
 
 ---

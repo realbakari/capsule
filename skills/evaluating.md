@@ -5,6 +5,41 @@ check anyway, and how to put it in CI.
 
 ---
 
+## The five dimensions
+
+Anthropic's enterprise guidance names five things to gate on. They are worth
+using as-is, because the third is the one people invent last and need most:
+
+| Dimension | Measures | Example failure |
+|---|---|---|
+| **Triggering accuracy** | Fires for the right queries, stays quiet otherwise | Fires on every mention of "spreadsheet", even in discussion |
+| **Isolation** | Works correctly on its own | References files that aren't in its directory |
+| **Coexistence** | Adding it doesn't degrade the *other* skills | Its description is too broad and steals their triggers |
+| **Instruction following** | Claude actually follows it | Skips validation, uses the wrong library |
+| **Output quality** | Results are correct and useful | Reports have formatting errors or missing data |
+
+**Coexistence is the one that gets skipped.** A skill is almost always tested
+alone, against the tasks it was written for, where it passes. The regression it
+causes is in a *different* skill that used to fire and now doesn't — and nothing
+in the format surfaces that. It is a property of the set, so it needs a
+corpus-level check:
+
+```bash
+python3 -m capsule.cli lint --index capsule-index.json    # trigger collisions
+./scripts/check-routing.sh                                # the other skills still route
+```
+
+Run your full routing assertions after adding any skill, not just the new one's.
+
+**Requirements worth adopting:** three to five representative queries per skill,
+covering cases where it *should* trigger, where it should *not*, and ambiguous
+edges. Test across every model you run — effectiveness varies by model. And keep
+authors from reviewing their own skills.
+
+Evaluation results are also lifecycle signals: declining trigger accuracy means
+rewrite the description; coexistence conflicts mean consolidate or narrow;
+persistent failures across updates mean deprecate.
+
 ## Build evaluations before documentation
 
 Write the evals first. Otherwise you document imagined problems.
@@ -231,12 +266,15 @@ Once it works for you, watch someone else use it:
 
 ## Checklist
 
-- [ ] At least three evals written before the body was
+- [ ] Three to five evals written before the body was
+- [ ] Evals cover should-trigger, should-*not*-trigger, and ambiguous edges
 - [ ] Baseline measured without the skill
+- [ ] Coexistence checked — the *other* skills still route correctly
 - [ ] Routing assertions for every phrasing you care about
 - [ ] `capsule lint` clean — no collisions, no truncation risk
 - [ ] `capsule doctor` clean at `--severity medium`
 - [ ] `capsule verify` wired into pre-commit or CI
 - [ ] `capsule harness` generated for prohibitions that must not be reachable
 - [ ] Tested with every model you plan to run
-- [ ] Someone other than the author has used it
+- [ ] Reviewed by someone who is not the author
+- [ ] Version pinned, with the previous version kept as a rollback

@@ -215,6 +215,11 @@ and a week-old account: no code signing, no security review, no sandbox by
 default. Ed25519 signing plus content hashes for Merkle-root registry
 verification is the recommended fix and is not yet widespread.
 
+Anthropic's enterprise guidance now names the same two controls explicitly —
+"compute checksums of reviewed Skills and verify them at deployment time" and
+"use signed commits in your Skill repository to ensure provenance". Capsule does
+the first and not the second, which sharpens rather than softens what follows.
+
 **Capsule: partially.** Provenance is recorded — origin path, tree hash,
 SKILL.md hash, license class — in a `PROVENANCE.md` that travels with every
 rebuilt pack. **Signature verification is not implemented.** Capsule records what
