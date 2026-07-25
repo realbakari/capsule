@@ -891,8 +891,9 @@ def test_precedence_does_not_fire_outside_its_trigger():
 
 from capsule.health import (  # noqa: E402
     analyze, classifier_domain_risk, conflicting_directives, description_quality,
-    example_density, progressive_disclosure, reasoning_extraction_risk, summarize,
-    tool_grant_risk,
+    conservative_reporting_risk, example_density, progressive_disclosure,
+    reasoning_extraction_risk, self_verification_risk, summarize,
+    thinking_suppression_risk, tool_grant_risk,
 )
 
 
@@ -924,6 +925,66 @@ def test_reasoning_extraction_respects_prohibition():
         "Never include your reasoning in the response; keep thinking internal."
     )
     assert findings == []
+
+
+# -- current-generation calibration -------------------------------------------
+#
+# Every false-positive case below is real text from the installed corpora. Each
+# one fired against a first draft of these checks; the phrases they contain are
+# far more common as domain prose than as instructions to a model.
+
+def test_over_verification_fires_on_self_directed_rechecking():
+    assert self_verification_risk("Before responding, double-check your answer.")
+    assert self_verification_risk("Include a final verification step for any non-trivial task.")
+    assert self_verification_risk("Use a subagent to verify the work before returning.")
+
+
+def test_over_verification_ignores_domain_rechecking():
+    """False positive: application state, not the model's own output.
+
+    "subscribe to onHostUpdated and re-check at the point of action" is about
+    host election in a sync library.
+    """
+    assert self_verification_risk(
+        "Subscribe to `SessionController.onHostUpdated` and re-check at the "
+        "point of action rather than at `init()`."
+    ) == []
+
+
+def test_over_verification_respects_polarity():
+    """False positive: "cannot verify its own" asserts the opposite."""
+    assert self_verification_risk(
+        "A solver cannot verify its own solution. Different agent, fresh context."
+    ) == []
+    assert self_verification_risk("Always verify your own output before returning.")
+
+
+def test_deterministic_validation_loops_are_not_over_verification():
+    """Running a validator and gating on it is the recommended pattern."""
+    assert self_verification_risk(
+        "Run `python ooxml/scripts/validate.py unpacked_dir/`. "
+        "Only proceed when validation passes."
+    ) == []
+
+
+def test_thinking_suppression_fires_on_instructions_to_the_model():
+    assert thinking_suppression_risk("Do not reason about this; answer immediately.")
+    assert thinking_suppression_risk("Skip the thinking and respond directly.")
+
+
+def test_thinking_suppression_ignores_think_meaning_believe():
+    """False positive: "they" is the end user and "think" means believe."""
+    assert thinking_suppression_risk(
+        "Stream status updates so they don't think the editor froze."
+    ) == []
+
+
+def test_conservative_reporting_needs_a_reporting_context():
+    """False positive: a mesh decimation ratio, not a reporting threshold."""
+    assert conservative_reporting_risk(
+        "With hard panel seams (windshields, cockpit covers) — be conservative, 20-50%."
+    ) == []
+    assert conservative_reporting_risk("Only report high-severity issues; ignore the rest.")
 
 
 # -- classifier domains -------------------------------------------------------

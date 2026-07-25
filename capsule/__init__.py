@@ -13,7 +13,8 @@ from .trust import aggregate, aggregate_api, ProviderAudit, TrustVerdict
 from .rules import Rule, RuleSet, RuleHit, default_ruleset
 from .config import CapsuleConfig, Precedence, description_budget, trigger_overlap, lethal_trifecta
 from .health import (
-    analyze, description_quality, summarize, tool_grant_risk,
+    analyze, conservative_reporting_risk, description_quality, self_verification_risk,
+    summarize, thinking_suppression_risk, tool_grant_risk,
     HealthReport, HealthFinding, Finding,
 )
 from .doctor import audit_skill, audit_context, SkillAudit, Diagnostic
@@ -42,7 +43,8 @@ __all__ = [
     "aggregate", "aggregate_api", "ProviderAudit", "TrustVerdict",
     "Rule", "RuleSet", "RuleHit", "default_ruleset",
     "CapsuleConfig", "Precedence", "description_budget", "trigger_overlap", "lethal_trifecta",
-    "analyze", "description_quality", "summarize", "tool_grant_risk",
+    "analyze", "conservative_reporting_risk", "description_quality",
+    "self_verification_risk", "summarize", "thinking_suppression_risk", "tool_grant_risk",
     "HealthReport", "HealthFinding", "Finding",
     "audit_skill", "audit_context", "SkillAudit", "Diagnostic",
     "Assertion", "AssertionResult", "CaseResult", "EvalCase", "EvalReport", "EvalSuite",

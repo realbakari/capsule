@@ -102,6 +102,21 @@ setup-writing-style   7024w  behav=91  policy=8  presc=1.3   altitude=brittle
 close together they are), monolithic bodies, example density, and
 reasoning-extraction refusal risk.
 
+Three of its checks come straight from the published Opus 5 prompting guidance,
+and all three are cases where an instruction that *looks* defensive makes output
+worse:
+
+| Anti-pattern | Why it hurts | Do instead |
+|---|---|---|
+| "double-check your answer", "include a final verification step" | Current models self-verify; the instruction compounds into wasted turns with no quality gain | Gate on a deterministic validator |
+| "do not reason", "skip the thinking" | Raises internal-XML-tag leakage into visible output rather than saving tokens | Lower the effort level |
+| "only report high-severity issues", "be conservative" | Followed literally — the model reports less | Ask for everything, filter in a second pass |
+
+Note the first is *not* an argument against feedback loops. "Run `validate.py`
+and do not proceed until it passes" is a deterministic gate and is recommended;
+"re-read your work and check it carefully" asks the model to redo something it
+already did.
+
 One deliberate exclusion: **security invariants are not counted as prescription.**
 This came out of running the check on Capsule's own pack, which first rated as the
 most prescriptive artifact in the corpus almost entirely on lines like "never load

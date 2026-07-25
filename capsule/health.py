@@ -121,7 +121,8 @@ _REASONING = re.compile(
 # leading up to the match rather than the whole sentence, so "never X" is
 # suppressed while "do X, and never Y" is not.
 _PROHIBITED = re.compile(
-    r"\b(never|not|don't|do not|avoid|refrain from|must not|should not|without)\b",
+    r"\b(never|not|don't|do not|avoid|refrain from|must not|should not|without"
+    r"|cannot|can't|won't|no need to)\b",
     re.IGNORECASE,
 )
 
@@ -143,6 +144,125 @@ def reasoning_extraction_risk(body: str) -> list[HealthFinding]:
             )
         )
     return findings
+
+
+# -- current-generation calibration -------------------------------------------
+
+# Instructions telling the model to re-check work it already re-checks. Current
+# models self-verify and self-correct without being asked; the published
+# guidance is explicit that these instructions "cause over-verification" and
+# that "removing them reduces wasted tokens with no loss in quality".
+#
+# Deliberately narrow: a skill that says "run validate.py, and do not proceed
+# until it passes" is a deterministic feedback loop, which is *recommended*.
+# What is flagged is the model being told to re-examine its own output.
+#
+# Every pattern here requires the *model's own output* as the object. A bare
+# "re-check" is domain prose far more often than it is an instruction:
+# "subscribe to onHostUpdated and re-check at the point of action" is about
+# application state, and flagging it teaches authors the check is noise.
+_SELF_VERIFICATION = re.compile(
+    r"\b(?:double[- ]check|re-?verify|re-?check|sanity[- ]check)\s+"
+    r"(?:your|its|the)\s+(?:own\s+)?"
+    r"(?:answer|work|output|response|result|reasoning|analysis|findings?)\b"
+    r"|\bcheck\s+your\s+(?:answer|work|output)\s+(?:again|twice|carefully)\b"
+    r"|\bverify\s+(?:your|its)\s+own\b"
+    r"|\b(?:final|additional|extra|separate)\s+verification\s+step\b"
+    r"|\buse a subagent to (?:verify|double[- ]check|review)\b",
+    re.IGNORECASE,
+)
+
+# Telling the model not to think does not save tokens on models where thinking
+# is on by default -- it increases internal-tag leakage into visible output.
+# The documented mitigation is to lower effort, never to forbid reasoning.
+#
+# "think" also means "believe", so a bare negation is ambiguous: "stream status
+# updates so they don't think the editor froze" is about the end user, not the
+# model. Two guards -- the negation must open a clause (an imperative, not a
+# subordinate "so they don't..."), and bare think/thinking only counts in forms
+# that can only mean reasoning.
+_THINKING_SUPPRESSION = re.compile(
+    r"(?:^|(?<=[.;:!?\n])|(?<=^- )|(?<=\n- ))\s*"
+    r"(?:do not|don't|never|avoid|no need to)\s+"
+    r"(?:reason\b|reasoning\b|deliberat\w*"
+    r"|think\s+(?:step[- ]by[- ]step|out loud|through|about it)"
+    r"|thinking\b)"
+    r"|\bwithout (?:reasoning|deliberating)\b"
+    r"|\bskip (?:the )?(?:thinking|reasoning)\b"
+    r"|\bdisable (?:thinking|reasoning)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Current models follow reporting-threshold instructions literally and report
+# less. The documented fix is to ask for everything and filter in a second pass.
+#
+# "be conservative" must be tied to reporting. On its own it is ordinary domain
+# advice -- "with hard panel seams, be conservative, 20-50%" is a mesh
+# decimation ratio.
+_CONSERVATIVE_REPORTING = re.compile(
+    r"\bonly report\b[^.\n]{0,40}\b(?:high[- ]severity|critical|major|serious)\b"
+    r"|\bbe conservative\b[^.\n]{0,60}\b(?:report|flag|find|issue|finding)\w*\b"
+    r"|\b(?:report|flag|surface|raise)\w*\b[^.\n]{0,40}\bbe conservative\b"
+    r"|\bonly (?:flag|surface|raise|report)\b[^.\n]{0,30}\b(?:critical|severe|high[- ]confidence)\b",
+    re.IGNORECASE,
+)
+
+
+def self_verification_risk(body: str) -> list[HealthFinding]:
+    """Flag instructions to re-check work the model already re-checks.
+
+    Polarity-guarded, like the reasoning-extraction check: "a solver *cannot*
+    verify its own solution" asserts that self-verification does not work. It
+    is the opposite of instructing it.
+    """
+    text = _prose(body)
+    match = None
+    for candidate in _SELF_VERIFICATION.finditer(text):
+        lead = text[max(0, candidate.start() - 40):candidate.start()]
+        if not _PROHIBITED.search(lead):
+            match = candidate
+            break
+    if not match:
+        return []
+    return [HealthFinding(
+        "over-verification", "medium",
+        "instructs the model to re-check its own work; current models already "
+        "self-verify, and these instructions compound into wasted turns with "
+        "no quality gain. A deterministic validator is the better form",
+        match.group(0)[:60],
+    )]
+
+
+def thinking_suppression_risk(body: str) -> list[HealthFinding]:
+    """Flag instructions forbidding reasoning.
+
+    High severity because the failure is visible to end users: suppressing
+    thinking increases the chance the model emits internal XML tags into its
+    response. Lower the effort level instead.
+    """
+    match = _THINKING_SUPPRESSION.search(_prose(body))
+    if not match:
+        return []
+    return [HealthFinding(
+        "thinking-suppression", "high",
+        "tells the model not to reason; this raises internal-tag leakage into "
+        "visible output rather than saving tokens. Lower the effort level "
+        "instead of forbidding reasoning",
+        match.group(0)[:60],
+    )]
+
+
+def conservative_reporting_risk(body: str) -> list[HealthFinding]:
+    """Flag reporting thresholds the model will follow literally."""
+    match = _CONSERVATIVE_REPORTING.search(_prose(body))
+    if not match:
+        return []
+    return [HealthFinding(
+        "conservative-reporting", "low",
+        "sets a reporting threshold the model follows literally and "
+        "under-reports against; ask for everything and filter in a second pass",
+        match.group(0)[:60],
+    )]
 
 
 # -- safety classifier domains ------------------------------------------------
@@ -482,6 +602,9 @@ def analyze(record: SourceRecord, body: str = "", aux_files: int = 0) -> HealthR
 
     findings: list[HealthFinding] = []
     findings.extend(reasoning_extraction_risk(body))
+    findings.extend(thinking_suppression_risk(body))
+    findings.extend(self_verification_risk(body))
+    findings.extend(conservative_reporting_risk(body))
     findings.extend(classifier_domain_risk(body))
     findings.extend(conflicting_directives(body))
     findings.extend(progressive_disclosure(body, aux_files))

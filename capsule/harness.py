@@ -31,9 +31,24 @@ class Provenance:
 
         The tier measures how a skill ingests external content, not whether it
         is trustworthy: a scraper is legitimate and still lands in `live`.
+
+        A `live` tier names the mitigations rather than only the risk. The
+        published guidance is explicit that the defenses which work are
+        structural -- delivering third-party content inside `tool_result`
+        blocks, JSON-encoding it so an attacker cannot close a quote and break
+        out into an instruction context, and scoping permissions so a
+        successful injection can do little. Signature matching is
+        defence-in-depth behind those, never a substitute: the attacks that
+        matter are natural-language and carry no signature at all.
         """
         detail = f" ({self.evidence})" if self.evidence else ""
-        return f"untrusted-input tier: {self.tier}{detail}"
+        line = f"untrusted-input tier: {self.tier}{detail}"
+        if self.tier == FETCH_LIVE:
+            line += (
+                "; deliver fetched content in tool_result blocks, JSON-encode "
+                "it, and scope this skill's tools narrowly"
+            )
+        return line
 
 
 def is_command_token(token: str) -> bool:
