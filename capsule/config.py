@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .rules import RuleSet, default_ruleset
+from .taxonomy import Taxonomy
 from .schema import RunContext, SourceRecord
 
 # Combined skill descriptions are concatenated into the agent's context to drive
@@ -61,6 +62,7 @@ class CapsuleConfig:
     use_default_rules: bool = True
     ruleset: RuleSet = field(default_factory=default_ruleset)
     precedence: list[Precedence] = field(default_factory=list)
+    taxonomy: Taxonomy = field(default_factory=Taxonomy)
 
     @classmethod
     def load(cls, path: str | Path | None) -> "CapsuleConfig":
@@ -87,6 +89,7 @@ class CapsuleConfig:
             use_default_rules=use_defaults,
             ruleset=ruleset,
             precedence=[Precedence(**p) for p in routing.get("precedence", [])],
+            taxonomy=Taxonomy.from_dict(data),
         )
 
 

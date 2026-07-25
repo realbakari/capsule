@@ -29,8 +29,10 @@ from capsule.evals import (  # noqa: E402
 from capsule.harness import (  # noqa: E402
     SkillMeta, claude_plugin_manifest, codex_plugin_manifest,
     cursor_plugin_manifest, grok_plugin_manifest, emit_all_plugins,
+    prompt_router_hook,
 )
 from capsule.color import green, red, yellow, cyan, bold, dim  # noqa: E402
+from capsule.taxonomy import Taxonomy, derive_domains, mentions  # noqa: E402
 from capsule.schema_export import (  # noqa: E402
     skill_frontmatter_schema, evals_schema, run_context_schema, export_schemas,
 )
@@ -2048,6 +2050,118 @@ def test_capsule_own_description_is_well_formed():
     front = parse_frontmatter(body)
     findings = description_quality(str(front.get("description") or ""))
     assert not [f for f in findings if f.severity in ("high", "medium")], findings
+
+
+# -- taxonomy: generalising past the corpus capsule shipped against -----------
+
+def test_category_keywords_are_word_boundary_matched():
+    """Regression: "form" is inside "performance", "return" inside "returns".
+
+    architecture.md records this trap and says never to reintroduce bare `in`
+    checks -- but the fix had only ever landed in the router, so category
+    inference labelled a trace analyser as admin-tasks and a debugger as
+    commerce.
+    """
+    assert not mentions("capture and analyze performance traces", "form")
+    assert not mentions("cartesian coordinates", "cart")
+    assert mentions("fill out this form", "form")
+
+
+def test_one_incidental_keyword_is_not_enough_to_categorise():
+    """A single description hit is weak evidence; say general instead."""
+    tax = Taxonomy()
+    assert tax.category_for("specs-debug", "Debug lenses. Returns diagnostics") == "general"
+    assert tax.category_for("lens-api", "Lens Scripting API documentation reference") == "general"
+
+
+def test_a_name_hit_is_strong_enough_on_its_own():
+    tax = Taxonomy()
+    assert tax.category_for("docx", "Create and edit Word documents and reports") == "document-io"
+
+
+def test_declared_taxonomy_wins_over_the_builtin_table():
+    tax = Taxonomy.from_dict({
+        "taxonomy": {
+            "category": [{"name": "lens-runtime", "keywords": ["lens", "spectacles"]}],
+        }
+    })
+    assert tax.category_for("lens-api", "Lens Scripting API for spectacles") == "lens-runtime"
+
+
+def test_defaults_can_be_replaced_outright():
+    """A single-domain workspace wants the starter table gone, not extended."""
+    tax = Taxonomy.from_dict({
+        "taxonomy": {
+            "extend_defaults": False,
+            "domain": [{"name": "lens", "keywords": ["lens"]}],
+        }
+    })
+    assert [d[0] for d in tax.domains] == ["lens"]
+    assert tax.classify("build a lens")[1] == "lens"
+    assert tax.classify("edit a docx")[1] == "general"
+
+
+def test_domains_are_derived_from_the_corpus_naming():
+    """New skills appear daily; a fixed table cannot keep up with them."""
+    names = ["specs-websocket", "specs-depth", "specs-asr", "lens-api", "lens-log-analysis"]
+    derived = dict(derive_domains(names))
+    assert "specs" in derived and "lens" in derived
+
+
+def test_derived_domains_need_corroboration():
+    """A token used by one skill is a name, not a domain."""
+    assert dict(derive_domains(["only-once", "unrelated-thing"])) == {}
+
+
+def test_derived_domains_are_consulted_before_the_builtins():
+    tax = Taxonomy().with_derived_domains(derive_domains(
+        ["specs-websocket", "specs-depth", "specs-asr"]
+    ))
+    assert tax.classify("check the specs for depth")[1] == "specs"
+
+
+# -- prompt routing hook ------------------------------------------------------
+
+def _run_router(tmp_path: Path, index: Path, payload: str):
+    script = tmp_path / "router.py"
+    script.write_text(prompt_router_hook(str(index)))
+    return _sp.run([sys.executable, str(script)], input=payload,
+                   capture_output=True, text=True, timeout=30, check=False,
+                   cwd=str(Path(__file__).resolve().parents[1]))
+
+
+def test_router_hook_is_opt_in():
+    """A hook that runs on every prompt must be asked for explicitly."""
+    contract = _harness_contract()
+    assert "capsule-router.py" not in {e.path for e in emit_all(contract, ".")}
+    assert "capsule-router.py" in {e.path for e in emit_all(contract, ".", index_path="/x.json")}
+
+
+def test_router_hook_registers_a_user_prompt_submit_event():
+    config = hook_config(_harness_contract(), route_prompts=True)
+    assert "UserPromptSubmit" in config["hooks"]
+    assert "PreToolUse" in config["hooks"]
+
+
+def test_router_hook_stays_silent_on_a_short_prompt(tmp_path):
+    result = _run_router(tmp_path, tmp_path / "nope.json", json.dumps({"prompt": "yes"}))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_router_hook_fails_open_on_a_missing_index(tmp_path):
+    """Never break the conversation because routing could not run."""
+    result = _run_router(
+        tmp_path, tmp_path / "nope.json",
+        json.dumps({"prompt": "add a websocket connection for live data"}),
+    )
+    assert result.returncode == 0
+    assert "<capsule-activation>" not in result.stdout
+
+
+def test_router_hook_fails_open_on_malformed_input(tmp_path):
+    result = _run_router(tmp_path, tmp_path / "nope.json", "not json at all")
+    assert result.returncode == 0
 
 
 # -- reading the right text ---------------------------------------------------

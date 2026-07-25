@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .policy import Policy
 from .schema import RunContext, SourceRecord
+from .taxonomy import Taxonomy, mentions
 
 _STOPWORDS = {
     "a", "an", "the", "and", "or", "for", "to", "of", "in", "on", "with", "my",
@@ -21,44 +22,16 @@ _STOPWORDS = {
     "it", "is", "are", "do", "how", "what", "some", "want", "need", "from",
 }
 
-# Intent taxonomy. Broad on purpose: intent narrows the candidate pool, domain
-# and body evidence do the fine-grained work.
-_INTENT_RULES: list[tuple[str, tuple[str, ...]]] = [
-    ("create", ("create", "make", "build", "generate", "write", "draft", "design")),
-    ("edit", ("edit", "fix", "update", "modify", "change", "revise", "clean")),
-    ("read", ("read", "extract", "parse", "summarize", "inspect", "open", "analyze")),
-    ("convert", ("convert", "transform", "export", "turn into")),
-    ("execute", ("order", "book", "submit", "file", "cancel", "refill", "return", "call")),
-]
-
-_DOMAIN_RULES: list[tuple[str, tuple[str, ...]]] = [
-    ("document", ("docx", "word", "document", "report", "memo", "letter")),
-    ("presentation", ("pptx", "slide", "deck", "presentation")),
-    ("spreadsheet", ("xlsx", "csv", "spreadsheet", "excel", "formula")),
-    ("pdf", ("pdf", "form fill", "watermark")),
-    ("skill", ("skill", "skill.md", "mcp", "eval")),
-    ("visual", ("art", "poster", "theme", "gif", "paint", "design", "ui", "frontend")),
-    ("writing", ("blog", "comms", "voice", "style", "documentation")),
-    ("commerce", ("grocery", "delivery", "refund", "subscription", "shopping")),
-    ("admin", ("expense", "reimbursement", "prescription", "appointment", "jury")),
-]
 
 
 def _tokens(text: str) -> set[str]:
     return {t for t in re.findall(r"[a-z0-9.]+", text.lower()) if t not in _STOPWORDS and len(t) > 1}
 
 
-def _mentions(haystack: str, needle: str) -> bool:
-    """Word-boundary containment.
-
-    Plain substring matching silently misfires: 'art' matches inside 'party',
-    which routed a grocery order into the visual-design domain. Multi-word
-    needles are matched as phrases with boundaries at each end.
-    """
-    # Tolerate a simple plural/verb suffix so 'grocery' matches 'groceries'
-    # without pulling in full stemming.
-    stem = re.escape(needle[:-1]) + "(?:y|ies)" if needle.endswith("y") else re.escape(needle) + "s?"
-    return re.search(rf"(?<!\w){stem}(?!\w)", haystack) is not None
+# Single implementation, shared with discovery and the taxonomy. Kept under
+# the old name because the trap it guards against is worth naming twice:
+# "art" is inside "party", "form" is inside "performance".
+_mentions = mentions
 
 
 @dataclass
@@ -110,11 +83,13 @@ class Routing:
         return "\n".join(lines)
 
 
-def classify(task: str) -> tuple[str, str]:
-    lowered = task.lower()
-    intent = next((i for i, kws in _INTENT_RULES if any(_mentions(lowered, k) for k in kws)), "unknown")
-    domain = next((d for d, kws in _DOMAIN_RULES if any(_mentions(lowered, k) for k in kws)), "general")
-    return intent, domain
+def classify(task: str, taxonomy: Taxonomy | None = None) -> tuple[str, str]:
+    """Classify a task against the active taxonomy.
+
+    Pass a taxonomy derived from the corpus to get labels that describe the
+    workspace rather than the table Capsule shipped with.
+    """
+    return (taxonomy or Taxonomy()).classify(task)
 
 
 def _stage1(task: str, record: SourceRecord) -> tuple[float, list[str]]:
@@ -196,6 +171,7 @@ def route(
     min_score: float = 1.5,
     policy: Policy | None = None,
     precedence: list | None = None,
+    taxonomy: Taxonomy | None = None,
 ) -> Routing:
     """Select one pack for a task.
 
@@ -203,7 +179,7 @@ def route(
     after: a skill Capsule may not load should never be able to win a route and
     then be refused downstream, because that leaks the runner-up's slot.
     """
-    intent, domain = classify(task)
+    intent, domain = classify(task, taxonomy)
     policy = policy or Policy()
 
     skills = list(context.of_type("skill"))

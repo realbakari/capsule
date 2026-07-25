@@ -66,17 +66,20 @@ def permission_rules(contract: Contract) -> dict:
     }
 
 
-def hook_config(contract: Contract) -> dict:
-    return {
-        "hooks": {
-            "PreToolUse": [
-                {
-                    "matcher": "Write|Edit",
-                    "hooks": ["capsule-hook.py"]
-                }
-            ]
-        }
+def hook_config(contract: Contract, route_prompts: bool = False) -> dict:
+    hooks: dict = {
+        "PreToolUse": [
+            {
+                "matcher": "Write|Edit",
+                "hooks": ["capsule-hook.py"]
+            }
+        ]
     }
+    if route_prompts:
+        # Fires before the model starts, which is the only point where Capsule
+        # can influence which pack gets read.
+        hooks["UserPromptSubmit"] = [{"hooks": ["capsule-router.py"]}]
+    return {"hooks": hooks}
 
 
 def hook_script(contract: Contract) -> str:
@@ -141,6 +144,86 @@ if __name__ == "__main__":
 """
 
 
+def prompt_router_hook(index_path: str, min_score: float = 1.5) -> str:
+    """A `UserPromptSubmit` hook that routes the prompt and injects the brief.
+
+    This is the piece that makes selection automatic rather than something a
+    human pastes. `PreToolUse` fires only once the agent has already decided to
+    write, which is too late to influence *which* skill it read; `verify` runs
+    after the diff exists. `UserPromptSubmit` is the only point at which
+    Capsule can put the right pack in front of the model before it starts.
+
+    Three deliberate constraints:
+
+    - **Fails open.** Any error, any timeout, any low-confidence route injects
+      nothing and exits 0. A hook that blocks the conversation when routing is
+      uncertain gets deleted, and then it routes nothing at all.
+    - **Silent below threshold.** Injecting a marginal pack is worse than
+      injecting none: it spends context and argues for the wrong approach.
+    - **Advisory wording.** The block says a pack looks relevant and names the
+      evidence. It does not claim the model must obey, because the contract --
+      not the prompt -- is what actually enforces anything.
+    """
+    return f'''#!/usr/bin/env python3
+"""Route each prompt to a skill and inject an activation brief. Fails open."""
+import json
+import subprocess
+import sys
+
+INDEX = {index_path!r}
+MIN_SCORE = {min_score!r}
+TIMEOUT_SECONDS = 10
+
+
+def main() -> int:
+    raw = sys.stdin.read()
+    if not raw.strip():
+        return 0
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return 0
+
+    prompt = (payload.get("prompt") or payload.get("user_prompt") or "").strip()
+    # Very short prompts ("yes", "go on") carry no routing signal, and routing
+    # them produces confident nonsense.
+    if len(prompt) < 12:
+        return 0
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "capsule.cli", "brief",
+             "--index", INDEX, "--task", prompt],
+            capture_output=True, text=True, timeout=TIMEOUT_SECONDS, check=False,
+        )
+    except Exception:
+        return 0
+
+    # Exit 2 is "no candidate cleared the threshold" -- the correct outcome for
+    # a prompt no skill covers, and not something to report as an error.
+    if result.returncode != 0 or not result.stdout.strip():
+        return 0
+
+    print("<capsule-activation>")
+    print(result.stdout.strip())
+    print(
+        "This pack was selected deterministically from the workspace index. "
+        "Read the SKILL.md above before proceeding. The listed obligations are "
+        "checked against the resulting diff."
+    )
+    print("</capsule-activation>")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as exc:  # never break the conversation
+        print(f"capsule router hook skipped: {{exc}}", file=sys.stderr)
+        sys.exit(0)
+'''
+
+
 def plugin_manifest(contract: Contract) -> dict:
     return {
         "name": contract.skill_name,
@@ -154,18 +237,26 @@ class ArtifactEntry:
     content: str
 
 
-def emit_all(contract: Contract, dest_dir: str | Path) -> list[ArtifactEntry]:
-    perm = permission_rules(contract)
-    h_cfg = hook_config(contract)
-    script = hook_script(contract)
-    manifest = plugin_manifest(contract)
+def emit_all(contract: Contract, dest_dir: str | Path,
+             index_path: str | None = None) -> list[ArtifactEntry]:
+    """Harness artifacts for a contract.
 
-    return [
-        ArtifactEntry("settings.json", json.dumps(perm, indent=2)),
-        ArtifactEntry("hooks/hooks.json", json.dumps(h_cfg, indent=2)),
-        ArtifactEntry("capsule-hook.py", script),
-        ArtifactEntry(".claude-plugin/plugin.json", json.dumps(manifest, indent=2)),
+    `index_path` opts into the prompt router. It is separate because routing
+    needs a workspace index, which is a different concern from a contract, and
+    because a hook that runs on every prompt should be asked for explicitly.
+    """
+    route_prompts = bool(index_path)
+    entries = [
+        ArtifactEntry("settings.json", json.dumps(permission_rules(contract), indent=2)),
+        ArtifactEntry("hooks/hooks.json",
+                      json.dumps(hook_config(contract, route_prompts), indent=2)),
+        ArtifactEntry("capsule-hook.py", hook_script(contract)),
+        ArtifactEntry(".claude-plugin/plugin.json",
+                      json.dumps(plugin_manifest(contract), indent=2)),
     ]
+    if route_prompts:
+        entries.append(ArtifactEntry("capsule-router.py", prompt_router_hook(index_path)))
+    return entries
 
 
 def classify_input_provenance(name: str, body: str) -> Provenance:

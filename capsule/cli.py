@@ -35,6 +35,7 @@ from .policy import Policy, PolicyError
 from .reconstruct import package, reconstruct
 from .router import route
 from .schema import RunContext
+from .taxonomy import derive_domains
 from .schema_export import export_schemas
 from .validate import validate_pack
 
@@ -67,6 +68,19 @@ def _registry(args: argparse.Namespace) -> Registry:
     return Registry(HttpTransport(api_key=getattr(args, "api_key", None)))
 
 
+def _taxonomy_for(context: RunContext, cfg: CapsuleConfig):
+    """Configured taxonomy, extended with domains derived from this corpus.
+
+    Built-in domains describe the corpus Capsule shipped against. Deriving from
+    the indexed names means a workspace of Lens Studio skills classifies as
+    Lens Studio rather than falling to "general", without anyone declaring
+    anything -- which matters because new skills appear faster than any table
+    can be maintained.
+    """
+    names = [r.name for r in context.of_type("skill")]
+    return cfg.taxonomy.with_derived_domains(derive_domains(names))
+
+
 def _load(index_path: str) -> RunContext:
     path = Path(index_path)
     if not path.exists():
@@ -77,7 +91,7 @@ def _load(index_path: str) -> RunContext:
 def cmd_index(args: argparse.Namespace) -> int:
     policy = _policy(args)
     roots = args.roots or DEFAULT_ROOTS
-    context = discover(roots, policy)
+    context = discover(roots, policy, taxonomy=_config(args).taxonomy)
     Path(args.out).write_text(context.to_json())
 
     skills = context.of_type("skill")
@@ -142,6 +156,7 @@ def cmd_route(args: argparse.Namespace) -> int:
         min_score=cfg.min_route_score,
         policy=_policy(args),
         precedence=cfg.precedence,
+        taxonomy=_taxonomy_for(context, cfg),
     )
     print(routing.report())
     return 0 if routing.selected else 2
@@ -478,7 +493,7 @@ def _select(args: argparse.Namespace):
     cfg = _config(args)
     routing = route(context, args.task, shortlist_size=cfg.shortlist_size,
                     min_score=cfg.min_route_score, policy=_policy(args),
-                    precedence=cfg.precedence)
+                    precedence=cfg.precedence, taxonomy=_taxonomy_for(context, cfg))
     if routing.selected is None:
         print(f"no pack selected: {routing.rationale}", file=sys.stderr)
         sys.exit(2)
@@ -564,7 +579,8 @@ def cmd_harness(args: argparse.Namespace) -> int:
     contract = contract_for_skill(record)
     commands, contents = split_obligations(contract)
 
-    emissions = emit_all(contract, args.dest)
+    index_path = str(Path(args.index).resolve()) if getattr(args, 'route_prompts', False) else None
+    emissions = emit_all(contract, args.dest, index_path=index_path)
     if args.dry_run:
         for emission in emissions:
             print(bold(f"--- {emission.path}"))
@@ -590,6 +606,12 @@ def cmd_harness(args: argparse.Namespace) -> int:
         f"\n{len(commands)} prohibition(s) never run (deny rules); "
         f"{len(contents)} blocked before the write lands (PreToolUse hook)."
     )
+    if index_path:
+        print(
+            "\nPrompt routing is on: every prompt is routed against "
+            f"{index_path} and a brief is injected when a pack clears the "
+            "confidence threshold. It fails open and stays silent below it."
+        )
     print(
         "Hook payload field names are harness-specific. Verify with "
         "CAPSULE_HOOK_DEBUG=1 before relying on the hook; it fails open when it "
@@ -719,6 +741,9 @@ def main(argv: list[str] | None = None) -> int:
         if name == "harness":
             p.add_argument("--dest", default="./.claude")
             p.add_argument("--dry-run", action="store_true", help="print instead of writing")
+            p.add_argument("--route-prompts", action="store_true",
+                           help="also emit a UserPromptSubmit hook that routes every "
+                                "prompt and injects the activation brief")
 
     p_registry = subparsers.add_parser("registry", help="query skills.sh and apply the trust gate")
     p_registry.add_argument("--query", default=None, help="search instead of the leaderboard")

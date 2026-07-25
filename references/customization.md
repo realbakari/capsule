@@ -23,6 +23,50 @@ shortlist_size = 4
 description_budget = 12000                  # truncation early-warning line
 ```
 
+## Taxonomy: categories, intents, domains
+
+These three vocabularies decide how your corpus is labelled and how a task is
+classified. They used to be hardcoded Python tables tuned against one example
+corpus, which is the main reason Capsule degraded on skills it had not seen.
+New skills appear daily; a fixed keyword table describes the corpus its author
+owned.
+
+```toml
+[taxonomy]
+extend_defaults = true      # false drops the built-ins entirely
+
+[[taxonomy.category]]
+name = "lens-runtime"
+keywords = ["lens", "lens studio", "spectacles"]
+
+[[taxonomy.domain]]
+name = "lens"
+keywords = ["lens", "spectacles", "snapchat"]
+```
+
+Declared entries are consulted first. For a workspace that lives in one domain,
+`extend_defaults = false` is usually right — there, `spreadsheet` and `commerce`
+are pure noise and can only mislabel.
+
+**Domains are also derived from your index automatically.** Any name token
+shared by two or more skills becomes a domain, so a workspace of
+`specs-websocket` / `specs-depth` / `specs-asr` yields a `specs` domain with
+nothing declared. On a 62-skill Lens Studio corpus this lifts domain
+classification from 1 task in 10 to 7. Declare entries when you want a label
+the names do not spell out — that `lens` and `spectacles` are one subject, for
+instance.
+
+**Categories demand corroboration.** A keyword hit in the skill *name* is
+strong; a single hit in the description is not. One incidental word made a
+debugger `commerce` ("Returns diagnostics") and an API reference `writing`
+("documentation reference"). Below two points of evidence the label is
+`general`, which is the same posture as the rest of Capsule: refuse rather than
+guess.
+
+All keyword matching is word-boundary matched. Bare substring matching is the
+documented trap — `form` is inside `performance`, `cart` inside `cartesian` —
+and it lives in exactly one function now, `taxonomy.mentions`.
+
 ## Custom rules
 
 Rules match on record fields and skill body text, then act. Matchers are ANDed —

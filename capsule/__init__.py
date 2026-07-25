@@ -22,10 +22,11 @@ from .evals import (
     load_evals, run_case, run_eval, run_eval_per_case,
 )
 from .schema_export import export_schemas
+from .taxonomy import Taxonomy, derive_domains, mentions
 from .harness import (
     ArtifactEntry, Provenance, SkillMeta, classify_input_provenance, emit_all,
     emit_all_plugins, hook_config, hook_script, is_command_token,
-    permission_rules, plugin_manifest, split_obligations,
+    permission_rules, plugin_manifest, prompt_router_hook, split_obligations,
 )
 from .contract import (
     Changeset, Contract, Obligation, VerificationReport, brief,
@@ -47,6 +48,7 @@ __all__ = [
     "Assertion", "AssertionResult", "CaseResult", "EvalCase", "EvalReport", "EvalSuite",
     "load_evals", "run_case", "run_eval", "run_eval_per_case",
     "export_schemas",
+    "Taxonomy", "derive_domains", "mentions",
     "Changeset", "Contract", "Obligation", "VerificationReport", "brief",
     "contract_for_skill", "extract_contract", "verify",
     "ArtifactEntry", "Provenance", "SkillMeta", "classify_input_provenance",

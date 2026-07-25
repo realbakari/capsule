@@ -86,6 +86,45 @@ reads as a blank line rather than as a grant. In the installed marketplace
 corpus that is **12 of 24 agents**. This is the same "declared but never
 derived" gap `references/limitations.md` #9 records for skills, one layer over.
 
+## Getting the right skill in front of the agent, every turn
+
+`brief` emits an activation block, but something has to inject it. `capsule
+harness --route-prompts` emits a `UserPromptSubmit` hook that routes every
+prompt against the index and injects the brief automatically:
+
+```bash
+capsule harness --index capsule-index.json --route-prompts --dest ./.claude
+```
+
+```
+<capsule-activation>
+Selected Skill: specs-websocket
+Source: ~/.agents/skills/specs-websocket/SKILL.md
+Context: score 9.72 over specs-leaf-write-scenarios (2.28)
+Enforceable obligations:
+  - must use `this.socket?.readyState === WebSocket.OPEN`
+</capsule-activation>
+```
+
+This is the only point where Capsule can influence *which* pack the model
+reads. `PreToolUse` fires once the agent has already decided to write, and
+`verify` runs after the diff exists — both are too late to change the choice.
+
+It **fails open** and stays silent below the confidence threshold: an unrelated
+prompt gets nothing, a two-word prompt gets nothing, a broken payload gets
+nothing. Injecting a marginal pack is worse than injecting none, and a hook
+that interrupts the conversation when routing is uncertain gets deleted.
+
+## Working on skills Capsule has never seen
+
+Categories, intents and domains are data in `capsule.toml`, not hardcoded
+tables — and domains are derived from your own index, so a workspace of
+`specs-websocket` / `specs-depth` / `specs-asr` yields a `specs` domain with
+nothing declared. On a 62-skill Lens Studio corpus that lifts domain
+classification from 1 task in 10 to 7, and category mislabelling
+(`perfetto-trace-analysis` → admin-tasks, because "form" is inside
+"performance") drops to zero. See `references/customization.md`.
+
 ## Adherence: when the agent ignores the skill
 
 The failure that survives good routing. The pack is selected, loaded — and the diff

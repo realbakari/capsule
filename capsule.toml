@@ -39,6 +39,35 @@ over = "web-artifacts-builder"
 when = "skill"
 reason = "both match on 'build'; only one authors skills"
 
+# --- taxonomy ----------------------------------------------------------------
+# Categories, intents and domains are data, not code. The built-in tables
+# describe the corpus Capsule was built against; yours is almost certainly a
+# different one, and new skills appear faster than any shipped table can track.
+#
+# Declared entries are consulted before the built-ins. Set extend_defaults to
+# false to drop the built-ins entirely, which is usually right for a workspace
+# that lives in one domain -- there, "spreadsheet" and "commerce" are pure noise.
+#
+# Domains are also derived automatically from the names in your index: a
+# workspace of specs-websocket / specs-depth / specs-asr yields a `specs`
+# domain with nothing declared. Declare entries when you want a label that the
+# names do not spell out, such as treating "lens" and "spectacles" as one thing.
+
+# [taxonomy]
+# extend_defaults = true
+#
+# [[taxonomy.category]]
+# name = "lens-runtime"
+# keywords = ["lens", "lens studio", "spectacles", "snapchat"]
+#
+# [[taxonomy.domain]]
+# name = "lens"
+# keywords = ["lens", "spectacles", "snapchat"]
+#
+# [[taxonomy.intent]]
+# name = "profile"
+# keywords = ["profile", "trace", "benchmark", "optimize"]
+
 # --- custom rules ------------------------------------------------------------
 # Matchers are ANDed. Actions: deny | approval | flag.
 # Rules escalate only: they can tighten a built-in allow, never clear a denial.

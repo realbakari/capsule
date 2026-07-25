@@ -23,6 +23,7 @@ import yaml
 
 from .policy import Policy
 from .schema import LIFECYCLES, TOOLS_INHERIT_ALL, RunContext, SourceRecord
+from .taxonomy import Taxonomy
 
 ROOT_INSTRUCTION_NAMES = (
     "CLAUDE.md",
@@ -48,19 +49,6 @@ DOC_DIR_NAMES = ("docs", "doc", "documentation", "adr", "rfcs")
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".mypy_cache"}
 
 _FRONTMATTER = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
-
-# Category inference. First match wins, so order matters.
-_CATEGORY_RULES: list[tuple[str, tuple[str, ...]]] = [
-    ("document-io", ("docx", "pdf", "pptx", "xlsx", "spreadsheet", "word document", "slide")),
-    ("file-routing", ("uploaded", "read from disk", "router", "extract content")),
-    ("skill-infrastructure", ("skill", "mcp server", "eval", "benchmark")),
-    ("visual-design", ("design", "art", "theme", "poster", "gif", "watercolor", "brand", "artifact")),
-    ("writing", ("writing", "documentation", "proposal", "comms", "voice profile", "draft")),
-    ("commerce", ("order", "grocery", "delivery", "refund", "return", "subscription", "cart")),
-    ("admin-tasks", ("expense", "reimburs", "form", "prescription", "appointment", "booking")),
-    ("analysis", ("calculation", "financial", "scenario", "projection")),
-    ("product-knowledge", ("anthropic's products", "claude code", "pricing")),
-]
 
 # Shortcut patterns: slash commands and CLI invocations mentioned in a body.
 _SLASH = re.compile(r"(?<![\w/])/([a-z][a-z0-9-]{2,30})\b")
@@ -102,12 +90,14 @@ _LIFECYCLE_DIRS = {
 }
 
 
-def _infer_category(name: str, description: str) -> str:
-    haystack = f"{name} {description}".lower()
-    for category, needles in _CATEGORY_RULES:
-        if any(n in haystack for n in needles):
-            return category
-    return "general"
+def _infer_category(name: str, description: str, taxonomy: Taxonomy | None = None) -> str:
+    """Keyword category inference, word-boundary matched.
+
+    Bare substring matching labelled `perfetto-trace-analysis` as admin-tasks
+    ("form" inside "performance") and `specs-debug` as commerce ("return"
+    inside "Returns"). Matching goes through the shared `mentions` helper.
+    """
+    return (taxonomy or Taxonomy()).category_for(name, description)
 
 
 def _category_from_nesting(skill_dir: Path) -> str | None:
@@ -197,7 +187,8 @@ def _purpose(body: str, description: str) -> str:
     return description[:280] or "no purpose statement found"
 
 
-def discover_skill(skill_dir: Path, policy: Policy, scope: str) -> SourceRecord | None:
+def discover_skill(skill_dir: Path, policy: Policy, scope: str,
+                   taxonomy: Taxonomy | None = None) -> SourceRecord | None:
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
         return None
@@ -234,7 +225,7 @@ def discover_skill(skill_dir: Path, policy: Policy, scope: str) -> SourceRecord 
         constraints.append("reconstruction:denied-by-default")
 
     # Layout is an authored signal; keywords are a guess. Prefer the author.
-    category = _category_from_nesting(skill_dir) or _infer_category(name, description)
+    category = _category_from_nesting(skill_dir) or _infer_category(name, description, taxonomy)
 
     # Frontmatter is more specific than layout, so a declared lifecycle wins
     # over the directory a skill happens to sit in.
@@ -414,7 +405,8 @@ def _simple_record(path: Path, source_type: str, category: str, scope: str) -> S
     )
 
 
-def discover(roots: list[str], policy: Policy, max_depth: int = 6) -> RunContext:
+def discover(roots: list[str], policy: Policy, max_depth: int = 6,
+             taxonomy: Taxonomy | None = None) -> RunContext:
     """Walk roots in contract order and build the condensed run context."""
     context = RunContext(
         roots=[str(Path(r)) for r in roots],
@@ -443,7 +435,7 @@ def discover(roots: list[str], policy: Policy, max_depth: int = 6) -> RunContext
                 if key in seen_skills:
                     continue
                 seen_skills.add(key)
-                record = discover_skill(skill_dir, policy, scope)
+                record = discover_skill(skill_dir, policy, scope, taxonomy)
                 if record:
                     context.records.append(record)
                 continue
