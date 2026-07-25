@@ -1,5 +1,5 @@
 {
-  "name": "capsule",
+  "name": "capsule-ctrl",
   "version": "0.1.0",
   "description": "Agent skill control plane — schema validation, contract enforcement, trust auditing, and multi-host plugin generation.",
   "repository": {

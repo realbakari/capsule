@@ -11,8 +11,14 @@ portable, license-gated, validated packages.
 Requires Python 3.11+ (`tomllib` is stdlib from 3.11).
 
 ```bash
-pip install git+https://github.com/realbakari/capsule
+pip install capsule-ctrl
 capsule --help
+```
+
+Or from source:
+
+```bash
+pip install git+https://github.com/realbakari/capsule
 ```
 
 Or work on it locally:
