@@ -39,9 +39,9 @@ from capsule.schema_export import (  # noqa: E402
 from capsule.doctor import audit_skill, audit_context  # noqa: E402
 from capsule.cli import main as capsule_cli_main  # noqa: E402
 
-SKILL_ROOTS = ["/mnt/skills/public", "/mnt/skills/examples"]
+SKILL_ROOTS = ["./skills", "./packs"]
 MOUNTS_PRESENT = all(Path(r).exists() for r in SKILL_ROOTS)
-needs_mounts = pytest.mark.skipif(not MOUNTS_PRESENT, reason="skill mounts not present")
+needs_mounts = pytest.mark.skipif(not MOUNTS_PRESENT, reason="skill directories not present")
 
 
 # -- schema -------------------------------------------------------------------
@@ -190,8 +190,11 @@ def test_restricted_override_requires_approval_and_is_logged():
     assert "reconstruct:x" in policy.audit_text()
 
 
-def test_writes_into_readonly_mounts_are_refused():
-    assert not Policy().can_write("/mnt/skills/public/docx/SKILL.md").allowed
+def test_writes_into_readonly_roots_are_refused(tmp_path):
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    policy = Policy(readonly_roots=[str(skills_dir)])
+    assert not policy.can_write(str(skills_dir / "docx" / "SKILL.md")).allowed
 
 
 def test_writes_outside_declared_roots_are_refused():
@@ -199,7 +202,9 @@ def test_writes_outside_declared_roots_are_refused():
 
 
 def test_writes_into_workspace_are_allowed():
-    assert Policy().can_write("/home/claude/packs/x").allowed
+    # ./packs is a default writable root; resolve it to get the absolute path.
+    packs = str(Path("./packs").resolve() / "x")
+    assert Policy().can_write(packs).allowed
 
 
 def test_unknown_action_is_denied():
@@ -254,10 +259,11 @@ def test_every_record_carries_the_required_field_set():
 
 
 @needs_mounts
-def test_discovery_never_writes_to_readonly_mounts():
-    before = {p: p.stat().st_mtime for p in Path("/mnt/skills/public").rglob("SKILL.md")}
+def test_discovery_never_writes_to_readonly_roots():
+    root = Path(SKILL_ROOTS[0])
+    before = {p: p.stat().st_mtime for p in root.rglob("SKILL.md")}
     discover(SKILL_ROOTS, Policy())
-    after = {p: p.stat().st_mtime for p in Path("/mnt/skills/public").rglob("SKILL.md")}
+    after = {p: p.stat().st_mtime for p in root.rglob("SKILL.md")}
     assert before == after
 
 
@@ -1847,7 +1853,7 @@ def test_harness_emission_respects_the_write_gate(tmp_path):
     contract = contract_for_skill(context.by_name("docx"))
     policy = Policy(writable_roots=[str(tmp_path)])
     assert policy.can_write(tmp_path / "settings.json").allowed
-    assert not policy.can_write("/mnt/skills/public/docx/settings.json").allowed
+    assert not policy.can_write("/etc/passwd").allowed
     assert emit_all(contract, tmp_path)
 
 

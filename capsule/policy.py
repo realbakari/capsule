@@ -66,10 +66,10 @@ class Policy:
         ruleset: RuleSet | None = None,
     ) -> None:
         self.writable_roots = [
-            str(Path(p).resolve()) for p in (writable_roots or ["/home/claude", "/mnt/user-data/outputs"])
+            str(Path(p).resolve()) for p in (writable_roots or ["./outputs", "./packs", "./out"])
         ]
         self.readonly_roots = [
-            str(Path(p).resolve()) for p in (readonly_roots or ["/mnt/skills", "/mnt/user-data/uploads", "/mnt/transcripts"])
+            str(Path(p).resolve()) for p in (readonly_roots or ["./skills", "./docs"])
         ]
         # Escape hatch for operators who hold rights Capsule cannot verify.
         # Off by default; flipping it is itself an audited decision.

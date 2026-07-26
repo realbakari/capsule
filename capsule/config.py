@@ -63,9 +63,9 @@ class Precedence:
 
 @dataclass
 class CapsuleConfig:
-    writable_roots: list[str] = field(default_factory=lambda: ["/home/claude", "/mnt/user-data/outputs"])
-    readonly_roots: list[str] = field(default_factory=lambda: ["/mnt/skills", "/mnt/user-data/uploads", "/mnt/transcripts"])
-    discover_roots: list[str] = field(default_factory=lambda: ["/mnt/skills/public", "/mnt/skills/examples"])
+    writable_roots: list[str] = field(default_factory=lambda: ["./outputs", "./packs", "./out"])
+    readonly_roots: list[str] = field(default_factory=lambda: ["./skills", "./docs"])
+    discover_roots: list[str] = field(default_factory=lambda: ["./skills", "./packs"])
     allow_restricted_reconstruction: bool = False
     allow_unaudited_registry_skills: bool = False
     min_route_score: float = 1.5

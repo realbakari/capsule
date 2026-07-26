@@ -107,7 +107,7 @@ enforceable obligations, and the fact that the diff will be checked:
 ```
 <capsule_activation>
 Selected skill pack: docx
-Location: /mnt/skills/public/docx/SKILL.md
+Location: ./skills/docx/SKILL.md
 Why: intent=create, domain=document
 Read this pack in full before editing. It is the governing guidance for this task.
 

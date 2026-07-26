@@ -8,11 +8,11 @@ you want to change.
 
 ```toml
 [discover]
-roots = ["/mnt/skills/public", "/mnt/skills/examples"]
+roots = ["./skills", "./packs"]
 
 [policy]
-writable_roots = ["/home/claude", "/mnt/user-data/outputs"]
-readonly_roots = ["/mnt/skills", "/mnt/user-data/uploads"]
+writable_roots = ["./outputs", "./packs", "./out"]
+readonly_roots = ["./skills", "./docs"]
 allow_restricted_reconstruction = false   # each flip is audited individually
 allow_unaudited_registry_skills = false
 use_default_rules = true                   # keep the OWASP AST10 starter rules

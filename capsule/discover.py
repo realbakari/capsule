@@ -219,7 +219,10 @@ def discover_skill(skill_dir: Path, policy: Policy, scope: str,
     confidence = round(min(confidence, 1.0), 2)
 
     constraints = [f"license:{license_class}"]
-    if str(skill_dir).startswith("/mnt/skills"):
+    # A skill under a path outside the working directory is externally managed.
+    try:
+        Path(skill_dir).resolve().relative_to(Path.cwd().resolve())
+    except ValueError:
         constraints.append("source-tree:read-only")
     if license_class != "apache-2.0":
         constraints.append("reconstruction:denied-by-default")
@@ -420,7 +423,12 @@ def discover(roots: list[str], policy: Policy, max_depth: int = 6,
         if not decision.allowed:
             continue
 
-        scope = "external-trusted" if str(root).startswith("/mnt/skills") else "repo"
+        # A root outside the working directory is external-trusted.
+        try:
+            root.resolve().relative_to(Path.cwd().resolve())
+            scope = "repo"
+        except ValueError:
+            scope = "external-trusted"
 
         for path, depth in _walk(root, max_depth):
             # 4/5. skills. Dedup by *resolved* directory: the same skill is

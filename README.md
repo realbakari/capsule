@@ -30,7 +30,7 @@ Or work on it locally:
 ```bash
 git clone https://github.com/realbakari/capsule && cd capsule
 pip3 install -e ".[dev]"
-python3 -m pytest -q          # 240 tests; 33 skip without the /mnt/skills corpus
+python3 -m pytest -q          # 240 tests; 33 skip without a skills corpus
 ```
 
 Either way you get the `capsule` console script; `python3 -m capsule.cli` works
@@ -331,7 +331,7 @@ description check. See [skills/descriptions.md](skills/descriptions.md).
 - `references/adherence.md` — obligation contracts and diff verification
 - `references/harness.md` — deny rules, blocking hooks, untrusted-input tiers
 - `tests/test_capsule.py` — 240 tests; the executable specification
-  (33 need the `/mnt/skills` corpus and skip without it)
+  (33 need the `./skills` corpus and skip without it)
 
 ## Exit codes
 

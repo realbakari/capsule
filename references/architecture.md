@@ -38,7 +38,7 @@ per-type globs:
 2. nested scoped instruction files (same names, greater depth, scope `scoped`)
 3. docs and architecture notes (`.md` under `docs/`, `adr/`, `rfcs/`)
 4. skill folders (any directory containing `SKILL.md`)
-5. trusted external skill references (roots under `/mnt/skills`, scope `external-trusted`)
+5. trusted external skill references (roots outside the working directory, scope `external-trusted`)
 6. tooling shortcuts and workflow notes (slash commands and script invocations
    scraped from bodies into `shortcuts`)
 

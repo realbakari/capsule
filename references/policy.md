@@ -31,8 +31,8 @@ default and should stay off unless someone has actually checked.
 
 ### Path gate — `can_write(path)`
 
-Read-only roots (`/mnt/skills`, `/mnt/user-data/uploads`, `/mnt/transcripts`)
-deny writes. Writable roots (`/home/claude`, `/mnt/user-data/outputs`) allow
+Read-only roots (`./skills`, `./docs`)
+deny writes. Writable roots (`./outputs`, `./packs`, `./out`) allow
 them. Everything else denies: being outside the read-only set is not permission.
 
 Paths are resolved before comparison, so `../` traversal cannot escape.
@@ -54,7 +54,7 @@ A refused reconstruction leaves no partial artifacts behind.
 ```
 ALLOW reconstruct:paint -- Apache-2.0 permits derivative works; attribution carried forward
 DENY  reconstruct:docx -- license forbids extraction and derivative works
-DENY  write:/mnt/skills/public/docx -- path is under read-only root /mnt/skills
+DENY  write:./skills/docx -- path is under read-only root ./skills
 DENY  reconstruct:morning -- license could not be determined; deny by default
 ```
 
